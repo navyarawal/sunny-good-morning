@@ -99,6 +99,7 @@ private struct AlarmSetupStep: View {
                         DatePicker("", selection: $vm.onboardingAlarm.date, displayedComponents: .hourAndMinute)
                             .datePickerStyle(.wheel)
                             .labelsHidden()
+                            .colorScheme(.light)
                             .frame(maxWidth: .infinity)
                     }
                 }
@@ -504,6 +505,7 @@ private struct AlarmEditSheet: View {
                                 DatePicker("", selection: $alarm.date, displayedComponents: .hourAndMinute)
                                     .datePickerStyle(.wheel)
                                     .labelsHidden()
+                                    .colorScheme(.light)
                                     .frame(maxWidth: .infinity)
                             }
                         }
