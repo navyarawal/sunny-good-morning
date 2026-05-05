@@ -277,7 +277,8 @@ final class AlarmAppViewModel: ObservableObject {
             guard let self else { return }
             self.isNFCScanning = false
             if matched {
-                self.alarmManager.stopAlarmAudio()
+                let id = self.activeAlarm?.id.uuidString ?? ""
+                self.alarmManager.dismissAlarm(alarmID: id)
                 self.sunMood = .happy
                 self.route = .checkIn
             } else {
