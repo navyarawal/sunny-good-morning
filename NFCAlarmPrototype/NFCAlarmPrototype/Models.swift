@@ -149,6 +149,25 @@ final class AlarmAppViewModel: ObservableObject {
                 self?.triggerAlarmRinging(alarmID: id)
             }
             .store(in: &cancellables)
+
+        // Background timer fires this when the alarm time arrives while the
+        // app is kept alive by the silent audio loop.
+        alarmManager.onAlarmFired = { [weak self] alarmID in
+            self?.triggerAlarmRinging(alarmID: alarmID)
+        }
+    }
+
+    // MARK: App lifecycle
+
+    func appDidEnterBackground() {
+        let active = alarms.filter { $0.isEnabled }
+        guard !active.isEmpty else { return }
+        alarmManager.startBackgroundMode(alarms: active)
+    }
+
+    func appDidBecomeActive() {
+        // Cancel background timers — foreground handles alarms via willPresent delegate
+        alarmManager.stopBackgroundMode()
     }
 
     // MARK: Persistence
