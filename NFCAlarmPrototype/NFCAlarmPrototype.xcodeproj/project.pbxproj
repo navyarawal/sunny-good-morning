@@ -11,7 +11,7 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
-		A60FC8C12F9DE11700D1F3F5 /* PBXFileSystemSynchronizedBuildFileExceptionSet */ = {
+		A60FC8C12F9DE11700D1F3F5 /* Exceptions for "NFCAlarmPrototype" folder in "NFCAlarmPrototype" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				Info.plist,
@@ -24,7 +24,7 @@
 		A60FC8AB2F9DE11700D1F3F5 /* NFCAlarmPrototype */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
-				A60FC8C12F9DE11700D1F3F5 /* PBXFileSystemSynchronizedBuildFileExceptionSet */,
+				A60FC8C12F9DE11700D1F3F5 /* Exceptions for "NFCAlarmPrototype" folder in "NFCAlarmPrototype" target */,
 			);
 			path = NFCAlarmPrototype;
 			sourceTree = "<group>";
@@ -265,7 +265,7 @@
 				CODE_SIGN_ENTITLEMENTS = NFCAlarmPrototype/NFCAlarmPrototype.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 6947YKW9CV;
+				DEVELOPMENT_TEAM = G78UC8SRH6;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = NFCAlarmPrototype/Info.plist;
@@ -282,6 +282,9 @@
 				PRODUCT_BUNDLE_IDENTIFIER = UCLA.NFCAlarmPrototype;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -299,7 +302,7 @@
 				CODE_SIGN_ENTITLEMENTS = NFCAlarmPrototype/NFCAlarmPrototype.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 6947YKW9CV;
+				DEVELOPMENT_TEAM = G78UC8SRH6;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = NFCAlarmPrototype/Info.plist;
@@ -316,6 +319,9 @@
 				PRODUCT_BUNDLE_IDENTIFIER = UCLA.NFCAlarmPrototype;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_EMIT_LOC_STRINGS = YES;

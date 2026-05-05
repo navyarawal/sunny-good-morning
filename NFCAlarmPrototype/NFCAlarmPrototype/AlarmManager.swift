@@ -8,8 +8,8 @@ final class AlarmManager: NSObject {
 
     var isAlarmPlaying = false
 
-    private var audioEngine: AVAudioEngine?
-    private var playerNode: AVAudioPlayerNode?
+    private var audioPlayer: AVAudioPlayer?
+    private var rampTimer: Timer?
 
     override init() {
         super.init()
@@ -74,121 +74,181 @@ final class AlarmManager: NSObject {
 
     func startAlarmAudio(volume: Float = 0.8, ringtone: String = "Classic") {
         guard !isAlarmPlaying else { return }
+
+        do {
+            try AVAudioSession.sharedInstance().setCategory(.playback, mode: .default, options: [.duckOthers])
+            try AVAudioSession.sharedInstance().setActive(true)
+        } catch {
+            return
+        }
+
+        guard let data = wavData(for: ringtone),
+              let player = try? AVAudioPlayer(data: data, fileTypeHint: AVFileType.wav.rawValue) else { return }
+
+        let clampedVolume = max(0, min(volume, 1))
+        player.numberOfLoops = -1
+        player.volume = clampedVolume * 0.2   // start quiet, ramp up
+        player.prepareToPlay()
+        player.play()
+
+        audioPlayer = player
+        isAlarmPlaying = true
+
+        rampVolume(on: player, to: clampedVolume, over: 30)
+    }
+
+    func previewSound(volume: Float = 0.8, ringtone: String = "Classic") {
+        audioPlayer?.stop()
+        rampTimer?.invalidate()
+        rampTimer = nil
+        audioPlayer = nil
+
         do {
             try AVAudioSession.sharedInstance().setCategory(.playback, mode: .default)
             try AVAudioSession.sharedInstance().setActive(true)
         } catch { return }
 
-        let engine = AVAudioEngine()
-        let node = AVAudioPlayerNode()
-        engine.attach(node)
+        guard let data = wavData(for: ringtone),
+              let player = try? AVAudioPlayer(data: data, fileTypeHint: AVFileType.wav.rawValue) else { return }
 
-        let format = AVAudioFormat(standardFormatWithSampleRate: 44100, channels: 1)!
-        engine.connect(node, to: engine.mainMixerNode, format: format)
-        engine.mainMixerNode.outputVolume = max(0, min(volume, 1))
+        player.volume = max(0, min(volume, 1))
+        player.prepareToPlay()
+        player.play()
+        audioPlayer = player
 
-        guard let buffer = buildBuffer(ringtone: ringtone, format: format) else { return }
-        do { try engine.start() } catch { return }
-
-        node.scheduleBuffer(buffer, at: nil, options: .loops)
-        node.play()
-        audioEngine = engine
-        playerNode = node
-        isAlarmPlaying = true
-    }
-
-    func previewSound(volume: Float = 0.8, ringtone: String = "Classic") {
-        stopAlarmAudio()
-        startAlarmAudio(volume: volume, ringtone: ringtone)
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) { [weak self] in
-            self?.stopAlarmAudio()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in
+            guard self?.isAlarmPlaying == false else { return }
+            self?.audioPlayer?.stop()
+            self?.audioPlayer = nil
         }
     }
 
     func stopAlarmAudio() {
-        playerNode?.stop()
-        audioEngine?.stop()
-        audioEngine = nil
-        playerNode = nil
+        rampTimer?.invalidate()
+        rampTimer = nil
+        audioPlayer?.stop()
+        audioPlayer = nil
         isAlarmPlaying = false
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
     }
 
-    // MARK: - Ringtone Buffers
-
-    private func buildBuffer(ringtone: String, format: AVAudioFormat) -> AVAudioPCMBuffer? {
-        switch ringtone {
-        case "Pulse":   return buildPulseBuffer(format: format)
-        case "Chime":   return buildChimeBuffer(format: format)
-        case "Urgent":  return buildUrgentBuffer(format: format)
-        case "Gentle":  return buildGentleBuffer(format: format)
-        default:        return buildClassicBuffer(format: format)
+    private func rampVolume(on player: AVAudioPlayer, to target: Float, over duration: TimeInterval) {
+        rampTimer?.invalidate()
+        let interval: TimeInterval = 0.5
+        let steps = Int(duration / interval)
+        let start = player.volume
+        let step = (target - start) / Float(steps)
+        var count = 0
+        rampTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self, weak player] t in
+            guard let player else { t.invalidate(); return }
+            count += 1
+            player.volume = min(target, start + step * Float(count))
+            if count >= steps { t.invalidate(); self?.rampTimer = nil }
         }
     }
 
+    // MARK: - WAV synthesis
+
+    private func wavData(for ringtone: String) -> Data? {
+        let sr = 44100
+        let samples: [Float]
+        switch ringtone {
+        case "Pulse":   samples = pulseSamples(sr: sr)
+        case "Chime":   samples = chimeSamples(sr: sr)
+        case "Urgent":  samples = urgentSamples(sr: sr)
+        case "Gentle":  samples = gentleSamples(sr: sr)
+        default:        samples = classicSamples(sr: sr)
+        }
+        return makeWAV(samples: samples, sampleRate: sr)
+    }
+
     // Classic: ascending 3-beep (880 → 1047 → 1319 Hz)
-    private func buildClassicBuffer(format: AVAudioFormat) -> AVAudioPCMBuffer? {
-        makeBuffer(format: format, duration: 2.0) { t in
-            struct B { var s, e, f: Double }
-            let beeps = [B(s:0.00,e:0.14,f:880), B(s:0.20,e:0.34,f:1047), B(s:0.40,e:0.54,f:1319)]
+    private func classicSamples(sr: Int) -> [Float] {
+        typealias B = (s: Double, e: Double, f: Double)
+        let beeps: [B] = [(0.00, 0.14, 880), (0.20, 0.34, 1047), (0.40, 0.54, 1319)]
+        return generate(sr: sr, duration: 2.0) { t in
             for b in beeps where t >= b.s && t < b.e {
                 let lt = t - b.s; let dur = b.e - b.s
-                return Float(sin(2 * .pi * b.f * t)) * 0.75 * Float(min(lt/0.01,1) * min((dur-lt)/0.01,1))
+                return Float(sin(2 * .pi * b.f * t)) * 0.75 *
+                    Float(min(lt / 0.01, 1) * min((dur - lt) / 0.01, 1))
             }
             return 0
         }
     }
 
-    // Pulse: single clean beep every 0.8s
-    private func buildPulseBuffer(format: AVAudioFormat) -> AVAudioPCMBuffer? {
-        makeBuffer(format: format, duration: 1.6) { t in
-            let on = t < 0.25
-            guard on else { return 0 }
-            let env = Float(min(t/0.01,1) * min((0.25-t)/0.01,1))
+    // Pulse: single clean beep every 1.6 s
+    private func pulseSamples(sr: Int) -> [Float] {
+        generate(sr: sr, duration: 1.6) { t in
+            guard t < 0.25 else { return 0 }
+            let env = Float(min(t / 0.01, 1) * min((0.25 - t) / 0.01, 1))
             return Float(sin(2 * .pi * 1000 * t)) * 0.75 * env
         }
     }
 
     // Chime: descending 3-beep (1319 → 1047 → 880 Hz)
-    private func buildChimeBuffer(format: AVAudioFormat) -> AVAudioPCMBuffer? {
-        makeBuffer(format: format, duration: 2.0) { t in
-            struct B { var s, e, f: Double }
-            let beeps = [B(s:0.00,e:0.14,f:1319), B(s:0.20,e:0.34,f:1047), B(s:0.40,e:0.54,f:880)]
+    private func chimeSamples(sr: Int) -> [Float] {
+        typealias B = (s: Double, e: Double, f: Double)
+        let beeps: [B] = [(0.00, 0.14, 1319), (0.20, 0.34, 1047), (0.40, 0.54, 880)]
+        return generate(sr: sr, duration: 2.0) { t in
             for b in beeps where t >= b.s && t < b.e {
                 let lt = t - b.s; let dur = b.e - b.s
-                return Float(sin(2 * .pi * b.f * t)) * 0.75 * Float(min(lt/0.01,1) * min((dur-lt)/0.01,1))
+                return Float(sin(2 * .pi * b.f * t)) * 0.75 *
+                    Float(min(lt / 0.01, 1) * min((dur - lt) / 0.01, 1))
             }
             return 0
         }
     }
 
-    // Urgent: rapid fire 6 short beeps
-    private func buildUrgentBuffer(format: AVAudioFormat) -> AVAudioPCMBuffer? {
-        makeBuffer(format: format, duration: 1.2) { t in
+    // Urgent: rapid 6 short beeps
+    private func urgentSamples(sr: Int) -> [Float] {
+        generate(sr: sr, duration: 1.2) { t in
             let slot = t.truncatingRemainder(dividingBy: 0.2)
             guard slot < 0.1 else { return 0 }
-            let env = Float(min(slot/0.005,1) * min((0.1-slot)/0.005,1))
+            let env = Float(min(slot / 0.005, 1) * min((0.1 - slot) / 0.005, 1))
             return Float(sin(2 * .pi * 1200 * t)) * 0.75 * env
         }
     }
 
-    // Gentle: slow soft single long tone
-    private func buildGentleBuffer(format: AVAudioFormat) -> AVAudioPCMBuffer? {
-        makeBuffer(format: format, duration: 3.0) { t in
+    // Gentle: slow soft long tone
+    private func gentleSamples(sr: Int) -> [Float] {
+        generate(sr: sr, duration: 3.0) { t in
             guard t < 1.2 else { return 0 }
-            let env = Float(min(t/0.1,1) * min((1.2-t)/0.3,1))
+            let env = Float(min(t / 0.1, 1) * min((1.2 - t) / 0.3, 1))
             return Float(sin(2 * .pi * 660 * t)) * 0.55 * env
         }
     }
 
-    private func makeBuffer(format: AVAudioFormat, duration: Double, sample: (Double) -> Float) -> AVAudioPCMBuffer? {
-        let sr = 44100.0
-        let frameCount = AVAudioFrameCount(sr * duration)
-        guard let buf = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frameCount) else { return nil }
-        buf.frameLength = frameCount
-        let ch = buf.floatChannelData![0]
-        for f in 0..<Int(frameCount) { ch[f] = sample(Double(f) / sr) }
-        return buf
+    private func generate(sr: Int, duration: Double, sample: (Double) -> Float) -> [Float] {
+        let count = Int(Double(sr) * duration)
+        return (0..<count).map { sample(Double($0) / Double(sr)) }
+    }
+
+    // Build a 16-bit PCM mono WAV blob in memory
+    private func makeWAV(samples: [Float], sampleRate: Int) -> Data {
+        let int16: [Int16] = samples.map { Int16(max(-32767, min(32767, $0 * 32767))) }
+        let dataSize = int16.count * 2
+        var wav = Data(capacity: 44 + dataSize)
+
+        func le32(_ v: UInt32) {
+            var x = v.littleEndian
+            withUnsafeBytes(of: &x) { wav.append(contentsOf: $0) }
+        }
+        func le16(_ v: UInt16) {
+            var x = v.littleEndian
+            withUnsafeBytes(of: &x) { wav.append(contentsOf: $0) }
+        }
+
+        wav += "RIFF".data(using: .ascii)!;  le32(UInt32(36 + dataSize))
+        wav += "WAVE".data(using: .ascii)!
+        wav += "fmt ".data(using: .ascii)!;  le32(16); le16(1); le16(1)
+        le32(UInt32(sampleRate)); le32(UInt32(sampleRate * 2)); le16(2); le16(16)
+        wav += "data".data(using: .ascii)!;  le32(UInt32(dataSize))
+
+        for s in int16 {
+            var v = s
+            withUnsafeBytes(of: &v) { wav.append(contentsOf: $0) }
+        }
+        return wav
     }
 }
 
