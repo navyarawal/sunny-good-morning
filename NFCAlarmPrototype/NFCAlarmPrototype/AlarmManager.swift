@@ -114,8 +114,8 @@ final class AlarmManager: NSObject {
         // One second of silence, looped forever. The AVAudioSession being active
         // is what keeps the app alive — the actual audio content is inaudible.
         let samples = [Float](repeating: 0, count: 44100)
-        guard let data = makeWAV(samples: samples, sampleRate: 44100),
-              let player = try? AVAudioPlayer(data: data, fileTypeHint: AVFileType.wav.rawValue) else { return }
+        let data = makeWAV(samples: samples, sampleRate: 44100)
+        guard let player = try? AVAudioPlayer(data: data, fileTypeHint: AVFileType.wav.rawValue) else { return }
 
         do {
             try AVAudioSession.sharedInstance().setCategory(.playback, mode: .default)
