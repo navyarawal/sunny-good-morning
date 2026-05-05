@@ -14,6 +14,7 @@ final class AlarmManager: NSObject {
     override init() {
         super.init()
         UNUserNotificationCenter.current().delegate = self
+        writeNotificationSounds()
     }
 
     // MARK: - Permissions
@@ -34,9 +35,13 @@ final class AlarmManager: NSObject {
         let content = UNMutableNotificationContent()
         content.title = "Rise & Tap"
         content.body = "Time to get up! Go find Sunny to stop this."
-        content.sound = .default
         content.categoryIdentifier = "ALARM"
         content.userInfo = ["alarmID": alarm.id.uuidString]
+        content.interruptionLevel = .timeSensitive  // breaks through Focus modes
+
+        // Use the bundled alarm sound so the OS plays it even when the app is killed
+        let soundName = notificationSoundName(for: alarm.ringtoneName)
+        content.sound = UNNotificationSound(named: UNNotificationSoundName(rawValue: soundName))
 
         let comps = Calendar.current.dateComponents([.hour, .minute], from: alarm.date)
         let prefix = alarm.id.uuidString
@@ -70,7 +75,7 @@ final class AlarmManager: NSObject {
         UNUserNotificationCenter.current().add(request)
     }
 
-    // MARK: - In-App Audio
+    // MARK: - In-App Audio (runs when app is foregrounded by the alarm)
 
     func startAlarmAudio(volume: Float = 0.8, ringtone: String = "Classic") {
         guard !isAlarmPlaying else { return }
@@ -78,23 +83,21 @@ final class AlarmManager: NSObject {
         do {
             try AVAudioSession.sharedInstance().setCategory(.playback, mode: .default, options: [.duckOthers])
             try AVAudioSession.sharedInstance().setActive(true)
-        } catch {
-            return
-        }
+        } catch { return }
 
         guard let data = wavData(for: ringtone),
               let player = try? AVAudioPlayer(data: data, fileTypeHint: AVFileType.wav.rawValue) else { return }
 
-        let clampedVolume = max(0, min(volume, 1))
+        let clamped = max(0, min(volume, 1))
         player.numberOfLoops = -1
-        player.volume = clampedVolume * 0.2   // start quiet, ramp up
+        player.volume = clamped * 0.2
         player.prepareToPlay()
         player.play()
 
         audioPlayer = player
         isAlarmPlaying = true
 
-        rampVolume(on: player, to: clampedVolume, over: 30)
+        rampVolume(on: player, to: clamped, over: 30)
     }
 
     func previewSound(volume: Float = 0.8, ringtone: String = "Classic") {
@@ -147,7 +150,58 @@ final class AlarmManager: NSObject {
         }
     }
 
-    // MARK: - WAV synthesis
+    // MARK: - Notification sound setup
+    //
+    // iOS will play a file from Library/Sounds as a notification sound even when the
+    // app is killed or the screen is locked — the system audio daemon reads it directly.
+    // We generate the WAV once at first launch so no audio assets need to be bundled.
+
+    private func notificationSoundName(for ringtoneName: String) -> String {
+        "rise_alarm_\(ringtoneName.lowercased()).wav"
+    }
+
+    private func writeNotificationSounds() {
+        guard let soundsDir = soundsDirectory() else { return }
+        let sr = 44100
+        let duration = 29.0  // just under the 30-second notification sound limit
+
+        let tones: [(String, [Float])] = [
+            ("classic", repeating(classicSamples(sr: sr), to: duration, sr: sr)),
+            ("pulse",   repeating(pulseSamples(sr: sr),   to: duration, sr: sr)),
+            ("chime",   repeating(chimeSamples(sr: sr),   to: duration, sr: sr)),
+            ("urgent",  repeating(urgentSamples(sr: sr),  to: duration, sr: sr)),
+            ("gentle",  repeating(gentleSamples(sr: sr),  to: duration, sr: sr)),
+        ]
+
+        for (name, samples) in tones {
+            let url = soundsDir.appendingPathComponent("rise_alarm_\(name).wav")
+            guard !FileManager.default.fileExists(atPath: url.path) else { continue }
+            let data = makeWAV(samples: samples, sampleRate: sr)
+            try? data.write(to: url)
+        }
+    }
+
+    private func soundsDirectory() -> URL? {
+        guard let lib = FileManager.default.urls(for: .libraryDirectory, in: .userDomainMask).first else { return nil }
+        let dir = lib.appendingPathComponent("Sounds")
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir
+    }
+
+    // Tile a short sample array to fill `duration` seconds
+    private func repeating(_ pattern: [Float], to duration: Double, sr: Int) -> [Float] {
+        let total = Int(Double(sr) * duration)
+        var result = [Float](repeating: 0, count: total)
+        var offset = 0
+        while offset < total {
+            let chunk = min(pattern.count, total - offset)
+            result.replaceSubrange(offset..<(offset + chunk), with: pattern[0..<chunk])
+            offset += pattern.count
+        }
+        return result
+    }
+
+    // MARK: - Short-clip WAV (used for in-app AVAudioPlayer preview / alarm loop)
 
     private func wavData(for ringtone: String) -> Data? {
         let sr = 44100
@@ -161,6 +215,8 @@ final class AlarmManager: NSObject {
         }
         return makeWAV(samples: samples, sampleRate: sr)
     }
+
+    // MARK: - Tone generators
 
     // Classic: ascending 3-beep (880 → 1047 → 1319 Hz)
     private func classicSamples(sr: Int) -> [Float] {
@@ -223,20 +279,15 @@ final class AlarmManager: NSObject {
         return (0..<count).map { sample(Double($0) / Double(sr)) }
     }
 
-    // Build a 16-bit PCM mono WAV blob in memory
+    // MARK: - 16-bit PCM WAV builder
+
     private func makeWAV(samples: [Float], sampleRate: Int) -> Data {
         let int16: [Int16] = samples.map { Int16(max(-32767, min(32767, $0 * 32767))) }
         let dataSize = int16.count * 2
         var wav = Data(capacity: 44 + dataSize)
 
-        func le32(_ v: UInt32) {
-            var x = v.littleEndian
-            withUnsafeBytes(of: &x) { wav.append(contentsOf: $0) }
-        }
-        func le16(_ v: UInt16) {
-            var x = v.littleEndian
-            withUnsafeBytes(of: &x) { wav.append(contentsOf: $0) }
-        }
+        func le32(_ v: UInt32) { var x = v.littleEndian; withUnsafeBytes(of: &x) { wav.append(contentsOf: $0) } }
+        func le16(_ v: UInt16) { var x = v.littleEndian; withUnsafeBytes(of: &x) { wav.append(contentsOf: $0) } }
 
         wav += "RIFF".data(using: .ascii)!;  le32(UInt32(36 + dataSize))
         wav += "WAVE".data(using: .ascii)!
@@ -244,10 +295,7 @@ final class AlarmManager: NSObject {
         le32(UInt32(sampleRate)); le32(UInt32(sampleRate * 2)); le16(2); le16(16)
         wav += "data".data(using: .ascii)!;  le32(UInt32(dataSize))
 
-        for s in int16 {
-            var v = s
-            withUnsafeBytes(of: &v) { wav.append(contentsOf: $0) }
-        }
+        for s in int16 { var v = s; withUnsafeBytes(of: &v) { wav.append(contentsOf: $0) } }
         return wav
     }
 }
@@ -266,8 +314,11 @@ extension AlarmManager: UNUserNotificationCenterDelegate {
             DispatchQueue.main.async {
                 NotificationCenter.default.post(name: .alarmDidFire, object: nil, userInfo: ["alarmID": alarmID])
             }
+            // Suppress the notification sound — in-app audio loop takes over immediately
+            handler([.banner])
+        } else {
+            handler([.banner, .sound])
         }
-        handler([.banner, .sound])
     }
 
     nonisolated func userNotificationCenter(
