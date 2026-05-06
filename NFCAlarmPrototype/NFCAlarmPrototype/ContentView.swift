@@ -215,16 +215,75 @@ private struct NFCSetupStep: View {
 // MARK: - Main Tab View
 
 private struct MainTabView: View {
+    @State private var selectedTab: AppTab = .home
+
     var body: some View {
-        TabView {
-            HomeTab()
-                .tabItem { Label("Home", systemImage: "sun.max.fill") }
-            AlarmTab()
-                .tabItem { Label("Alarm", systemImage: "alarm.fill") }
-            StatsTab()
-                .tabItem { Label("Growth", systemImage: "chart.bar.fill") }
+        ZStack(alignment: .bottom) {
+            Group {
+                switch selectedTab {
+                case .home:
+                    HomeTab()
+                case .alarm:
+                    AlarmTab()
+                case .growth:
+                    StatsTab()
+                }
+            }
+            SunriseTabBar(selectedTab: $selectedTab)
+                .padding(.horizontal, 44)
+                .padding(.bottom, 16)
         }
-        .tint(AppTheme.sunAmber)
+    }
+}
+
+private enum AppTab: CaseIterable {
+    case home, alarm, growth
+
+    var title: String {
+        switch self {
+        case .home: return "Home"
+        case .alarm: return "Alarm"
+        case .growth: return "Growth"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .home: return "sun.max.fill"
+        case .alarm: return "alarm.fill"
+        case .growth: return "chart.bar.fill"
+        }
+    }
+}
+
+private struct SunriseTabBar: View {
+    @Binding var selectedTab: AppTab
+
+    var body: some View {
+        HStack(spacing: 8) {
+            ForEach(AppTab.allCases, id: \.self) { tab in
+                Button {
+                    selectedTab = tab
+                } label: {
+                    VStack(spacing: 3) {
+                        Image(systemName: tab.icon)
+                            .font(.system(size: 16, weight: .bold))
+                        Text(tab.title)
+                            .font(.system(size: 9, weight: .bold, design: .rounded))
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 8)
+                    .foregroundStyle(selectedTab == tab ? AppTheme.sunAmber : Color.white.opacity(0.72))
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(AppTheme.deepNight)
+        .clipShape(Capsule())
+        .shadow(color: .black.opacity(0.22), radius: 14, x: 0, y: 8)
     }
 }
 
@@ -237,89 +296,143 @@ private struct HomeTab: View {
     var body: some View {
         ZStack {
             AppTheme.homeGradient(hour: hour).ignoresSafeArea()
-
             ScrollView {
-                VStack(spacing: 0) {
-                    // Header
+                VStack(spacing: 16) {
                     HStack {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(AppTheme.greeting(hour: hour))
-                                .font(.system(size: 28, weight: .black, design: .rounded))
-                                .foregroundStyle(Color.white)
-                            Text(Date.now.formatted(.dateTime.weekday(.wide).month().day()))
-                                .font(.system(.subheadline, design: .rounded))
-                                .foregroundStyle(Color.white.opacity(0.7))
-                        }
+                        Text("Growth")
+                            .font(.system(size: 26, weight: .black, design: .rounded))
+                            .foregroundStyle(.white)
                         Spacer()
+                        Text(Date.now.formatted(.dateTime.hour().minute()))
+                            .font(.system(.caption, design: .rounded, weight: .bold))
+                            .foregroundStyle(AppTheme.textDark.opacity(0.70))
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 7)
+                            .background(.white.opacity(0.45))
+                            .clipShape(Capsule())
                     }
-                    .padding(.horizontal, 24)
-                    .padding(.top, 60)
-                    .padding(.bottom, 32)
+                    .padding(.top, 58)
 
-                    // Mascot
-                    SunMascotView(level: vm.sunLevel, mood: vm.sunMood, size: 172)
-                        .padding(.bottom, 16)
-
-                    // Level badge + streak
-                    VStack(spacing: 6) {
-                        Text(vm.sunLevel.title)
-                            .font(.system(.headline, design: .rounded, weight: .bold))
-                            .foregroundStyle(Color.white)
-                        streakPill
+                    SunCard {
+                        VStack(spacing: 12) {
+                            SunMascotView(level: vm.sunLevel, mood: vm.sunMood, size: 142)
+                                .padding(.top, 4)
+                            Text(vm.sunLevel.title)
+                                .font(.system(.title3, design: .rounded, weight: .black))
+                                .foregroundStyle(AppTheme.textDark)
+                            Text(vm.sunLevel.subtitle)
+                                .font(.system(.caption, design: .rounded, weight: .medium))
+                                .foregroundStyle(AppTheme.textMedium)
+                                .multilineTextAlignment(.center)
+                            levelProgressBar
+                                .padding(.top, 4)
+                        }
+                        .frame(maxWidth: .infinity)
                     }
-                    .padding(.bottom, 32)
 
-                    // Info cards
-                    VStack(spacing: 14) {
-                        HStack(spacing: 14) {
-                            infoCard(
-                                icon: "alarm.fill",
-                                title: "Next Alarm",
-                                value: vm.nextAlarmText,
-                                accent: AppTheme.sunAmber
-                            )
-                            infoCard(
-                                icon: vm.registeredStickerID == nil ? "exclamationmark.triangle.fill" : "checkmark.seal.fill",
-                                title: "Sunny's Spot",
-                                value: vm.registeredStickerID == nil ? "Not set up" : "Ready",
-                                accent: vm.registeredStickerID == nil ? .orange : .green
-                            )
+                    HStack(spacing: 14) {
+                        infoCard(icon: "flame.fill", title: "\(vm.wakeStreak)", value: "day streak", accent: AppTheme.sunAmber)
+                        infoCard(icon: "alarm.fill", title: vm.nextAlarmText, value: "next alarm", accent: AppTheme.sunAmber)
+                    }
+
+                    SunCard {
+                        VStack(alignment: .leading, spacing: 14) {
+                            Text("All Levels")
+                                .font(.system(.headline, design: .rounded, weight: .bold))
+                                .foregroundStyle(AppTheme.textDark)
+                            ForEach(SunLevel.allCases.prefix(3), id: \.rawValue) { level in
+                                compactLevelRow(level)
+                            }
                         }
                     }
-                    .padding(.horizontal, 20)
-                    .padding(.bottom, 32)
                 }
+                .padding(.horizontal, 22)
+                .padding(.bottom, 112)
             }
         }
     }
 
-    private var streakPill: some View {
-        HStack(spacing: 6) {
-            Image(systemName: "flame.fill")
-                .foregroundStyle(.orange)
-            Text("\(vm.wakeStreak) day streak")
-                .font(.system(.subheadline, design: .rounded, weight: .semibold))
+    private var levelProgressBar: some View {
+        let current = vm.sunLevel
+        let threshold = current.streakThreshold
+        let nextThreshold = current.nextThreshold
+        let progress = current == .legendary ? 1 : Double(vm.wakeStreak - threshold) / Double(nextThreshold - threshold)
+        return VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text("\(vm.wakeStreak) / \(current == .legendary ? vm.wakeStreak : nextThreshold) days")
+                    .font(.system(size: 10, weight: .bold, design: .rounded))
+                    .foregroundStyle(AppTheme.textMedium)
+                Spacer()
+                Text(current == .legendary ? "Top level" : "Next: \(SunLevel(rawValue: current.rawValue + 1)?.title ?? "")")
+                    .font(.system(size: 10, weight: .medium, design: .rounded))
+                    .foregroundStyle(AppTheme.textLight)
+            }
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    RoundedRectangle(cornerRadius: 3, style: .continuous)
+                        .fill(AppTheme.creamWarm)
+                    RoundedRectangle(cornerRadius: 3, style: .continuous)
+                        .fill(AppTheme.sunAmber)
+                        .frame(width: geo.size.width * max(0, min(progress, 1)))
+                }
+            }
+            .frame(height: 6)
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 8)
-        .background(.ultraThinMaterial)
-        .clipShape(Capsule())
     }
 
     private func infoCard(icon: String, title: String, value: String, accent: Color) -> some View {
         SunCard {
-            VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 12) {
                 Image(systemName: icon)
-                    .foregroundStyle(accent)
-                    .font(.title3)
-                Text(title)
-                    .font(.system(.caption, design: .rounded))
-                    .foregroundStyle(AppTheme.textLight)
-                Text(value)
-                    .font(.system(.headline, design: .rounded, weight: .bold))
-                    .foregroundStyle(AppTheme.textDark)
+                    .foregroundStyle(.white)
+                    .font(.system(size: 18, weight: .bold))
+                    .frame(width: 34, height: 34)
+                    .background(accent)
+                    .clipShape(Circle())
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                        .font(.system(size: 22, weight: .black, design: .rounded))
+                        .foregroundStyle(AppTheme.textDark)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.65)
+                    Text(value)
+                        .font(.system(.caption, design: .rounded, weight: .semibold))
+                        .foregroundStyle(AppTheme.textMedium)
+                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private func compactLevelRow(_ level: SunLevel) -> some View {
+        let unlocked = vm.wakeStreak >= level.streakThreshold
+        return HStack(spacing: 10) {
+            Image(systemName: unlocked ? "sun.max.fill" : "lock.fill")
+                .font(.system(size: 12, weight: .bold))
+                .foregroundStyle(unlocked ? .white : AppTheme.textLight)
+                .frame(width: 26, height: 26)
+                .background(unlocked ? AppTheme.sunAmber : Color.gray.opacity(0.12))
+                .clipShape(Circle())
+            VStack(alignment: .leading, spacing: 1) {
+                HStack(spacing: 6) {
+                    Text(level.title)
+                        .font(.system(.subheadline, design: .rounded, weight: .bold))
+                        .foregroundStyle(unlocked ? AppTheme.textDark : AppTheme.textLight)
+                    if vm.sunLevel == level {
+                        Text("NOW")
+                            .font(.system(size: 8, weight: .black, design: .rounded))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 2)
+                            .background(AppTheme.sunAmber)
+                            .clipShape(Capsule())
+                    }
+                }
+                Text("\(level.streakThreshold)+ days")
+                    .font(.system(.caption2, design: .rounded, weight: .medium))
+                    .foregroundStyle(AppTheme.textLight)
+            }
+            Spacer()
         }
     }
 }
@@ -333,7 +446,7 @@ private struct AlarmTab: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                Color(red: 0.97, green: 0.96, blue: 0.94).ignoresSafeArea()
+                AppTheme.homeGradient(hour: AppTheme.currentHour).ignoresSafeArea()
 
                 Group {
                     if vm.alarms.isEmpty {
@@ -366,10 +479,11 @@ private struct AlarmTab: View {
                         }
                         .listStyle(.plain)
                         .scrollContentBackground(.hidden)
+                        .safeAreaPadding(.bottom, 96)
                     }
                 }
             }
-            .navigationTitle("Alarms")
+            .navigationTitle("Alarm")
             .navigationBarTitleDisplayMode(.large)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
@@ -397,7 +511,7 @@ private struct AlarmTab: View {
         VStack(spacing: 16) {
             Image(systemName: "alarm")
                 .font(.system(size: 48))
-                .foregroundStyle(AppTheme.textLight)
+                .foregroundStyle(AppTheme.sunAmber)
             Text("No alarms yet")
                 .font(.system(.title3, design: .rounded, weight: .bold))
                 .foregroundStyle(AppTheme.textDark)
@@ -405,6 +519,10 @@ private struct AlarmTab: View {
                 .font(.system(.subheadline, design: .rounded))
                 .foregroundStyle(AppTheme.textMedium)
         }
+        .padding(24)
+        .background(AppTheme.bgCard.opacity(0.78))
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .padding(.horizontal, 24)
     }
 
     private var nfcSection: some View {
@@ -422,6 +540,7 @@ private struct AlarmTab: View {
                             Text(id)
                                 .font(.system(.caption2, design: .monospaced))
                                 .foregroundStyle(AppTheme.textLight)
+                                .lineLimit(1)
                         }
                     }
                 } else {
@@ -456,11 +575,17 @@ private struct AlarmRow: View {
                 Button(action: onTap) {
                     VStack(alignment: .leading, spacing: 4) {
                         Text(alarm.timeText)
-                            .font(.system(size: 32, weight: .black, design: .rounded))
+                            .font(.system(size: 30, weight: .black, design: .rounded))
                             .foregroundStyle(alarm.isEnabled ? AppTheme.textDark : AppTheme.textLight)
                         Text(alarm.daysText)
-                            .font(.system(.caption, design: .rounded))
+                            .font(.system(.caption, design: .rounded, weight: .semibold))
                             .foregroundStyle(AppTheme.textMedium)
+                        HStack(spacing: 8) {
+                            Label(alarm.ringtoneName, systemImage: "music.note")
+                            Label("\(Int(alarm.volume * 100))%", systemImage: "speaker.wave.2.fill")
+                        }
+                        .font(.system(size: 10, weight: .bold, design: .rounded))
+                        .foregroundStyle(AppTheme.textLight)
                     }
                 }
                 .buttonStyle(.plain)
@@ -494,9 +619,9 @@ private struct AlarmEditSheet: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                Color(red: 0.97, green: 0.96, blue: 0.94).ignoresSafeArea()
+                AppTheme.homeGradient(hour: AppTheme.currentHour).ignoresSafeArea()
                 ScrollView {
-                    VStack(spacing: 18) {
+                    VStack(spacing: 12) {
                         SunCard {
                             VStack(alignment: .leading, spacing: 6) {
                                 Label("Wake Time", systemImage: "clock.fill")
@@ -536,6 +661,20 @@ private struct AlarmEditSheet: View {
                         }
 
                         SunCard {
+                            VStack(alignment: .leading, spacing: 10) {
+                                Label("Check-In Reminder", systemImage: "bell.badge.fill")
+                                    .font(.system(.caption, design: .rounded, weight: .semibold))
+                                    .foregroundStyle(AppTheme.textMedium)
+                                Stepper(
+                                    "\(alarm.checkInIntervalMinutes) min after each tap",
+                                    value: $alarm.checkInIntervalMinutes,
+                                    in: 1...30
+                                )
+                                .font(.system(.subheadline, design: .rounded))
+                            }
+                        }
+
+                        SunCard {
                             VStack(alignment: .leading, spacing: 14) {
                                 Label("Volume", systemImage: "speaker.wave.2.fill")
                                     .font(.system(.caption, design: .rounded, weight: .semibold))
@@ -555,6 +694,10 @@ private struct AlarmEditSheet: View {
                                     Image(systemName: "speaker.wave.3.fill")
                                         .foregroundStyle(AppTheme.textLight)
                                         .font(.caption)
+                                    Text("\(Int(alarm.volume * 100))")
+                                        .font(.system(.caption, design: .rounded, weight: .bold))
+                                        .foregroundStyle(AppTheme.textLight)
+                                        .frame(width: 28, alignment: .trailing)
                                 }
                             }
                         }
@@ -570,15 +713,15 @@ private struct AlarmEditSheet: View {
                                         previewCurrent()
                                     } label: {
                                         HStack {
+                                            Image(systemName: alarm.ringtoneName == name ? "largecircle.fill.circle" : "circle")
+                                                .foregroundStyle(alarm.ringtoneName == name ? AppTheme.sunAmber : AppTheme.textLight.opacity(0.5))
                                             Text(name)
                                                 .font(.system(.subheadline, design: .rounded))
                                                 .foregroundStyle(AppTheme.textDark)
                                             Spacer()
-                                            if alarm.ringtoneName == name {
-                                                Image(systemName: "checkmark")
-                                                    .foregroundStyle(AppTheme.sunAmber)
-                                                    .fontWeight(.semibold)
-                                            }
+                                            Image(systemName: "play.fill")
+                                                .font(.caption)
+                                                .foregroundStyle(AppTheme.textLight)
                                         }
                                         .contentShape(Rectangle())
                                     }
@@ -598,6 +741,7 @@ private struct AlarmEditSheet: View {
                     }
                     .padding(.horizontal, 20)
                     .padding(.top, 8)
+                    .padding(.bottom, 18)
                 }
             }
             .navigationTitle("Edit Alarm")
@@ -935,15 +1079,15 @@ struct RepeatDayPicker: View {
         HStack(spacing: 6) {
             ForEach(RepeatDay.allCases) { day in
                 let on = days.contains(day)
-                Button(day.rawValue.prefix(1).uppercased() + day.rawValue.dropFirst().lowercased()) {
+                Button(day.rawValue) {
                     if on { days.remove(day) } else { days.insert(day) }
                 }
-                .font(.system(size: 12, weight: on ? .bold : .regular, design: .rounded))
+                .font(.system(size: 10, weight: on ? .black : .bold, design: .rounded))
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, 9)
-                .background(on ? AppTheme.sunAmber : Color.gray.opacity(0.10))
+                .padding(.vertical, 8)
+                .background(on ? AppTheme.sunAmber : AppTheme.creamWarm.opacity(0.72))
                 .foregroundStyle(on ? .white : AppTheme.textMedium)
-                .clipShape(RoundedRectangle(cornerRadius: 10))
+                .clipShape(Capsule())
                 .animation(.spring(duration: 0.2), value: on)
             }
         }

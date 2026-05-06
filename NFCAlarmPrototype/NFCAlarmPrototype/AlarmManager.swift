@@ -29,6 +29,7 @@ final class AlarmManager: NSObject {
     override init() {
         super.init()
         UNUserNotificationCenter.current().delegate = self
+        registerNotificationCategories()
         copyBundledSoundsToLibrary()
     }
 
@@ -54,7 +55,7 @@ final class AlarmManager: NSObject {
         guard alarm.isEnabled else { return }
         guard let firstFire = nextFiringDate(for: alarm) else { return }
 
-        let soundFilename = "rise_\(alarm.ringtoneName.lowercased()).wav"
+        let soundFilename = notificationSoundFileName(for: alarm.ringtoneName)
         let sound = UNNotificationSound(named: UNNotificationSoundName(rawValue: soundFilename))
 
         for i in 0..<chainCount {
@@ -66,7 +67,12 @@ final class AlarmManager: NSObject {
             content.title = i == 0 ? "⏰ Rise & Tap" : "Still ringing — find Sunny!"
             content.body = "Get up and tap your sticker to dismiss."
             content.categoryIdentifier = "ALARM"
-            content.userInfo = ["alarmID": alarm.id.uuidString, "chainIndex": i]
+            content.userInfo = [
+                "alarmID": alarm.id.uuidString,
+                "chainIndex": i,
+                "ringtone": alarm.ringtoneName,
+                "volume": alarm.volume
+            ]
             content.interruptionLevel = .timeSensitive
             content.sound = sound
 
@@ -111,6 +117,21 @@ final class AlarmManager: NSObject {
             let ids = notes.map(\.request.identifier).filter { $0.hasPrefix(prefix) }
             center.removeDeliveredNotifications(withIdentifiers: ids)
         }
+    }
+
+    private func registerNotificationCategories() {
+        let openAction = UNNotificationAction(
+            identifier: "OPEN_ALARM",
+            title: "Open Alarm",
+            options: [.foreground]
+        )
+        let category = UNNotificationCategory(
+            identifier: "ALARM",
+            actions: [openAction],
+            intentIdentifiers: [],
+            options: [.customDismissAction]
+        )
+        UNUserNotificationCenter.current().setNotificationCategories([category])
     }
 
     // MARK: - Background mode
@@ -297,6 +318,14 @@ final class AlarmManager: NSObject {
         let dir = lib.appendingPathComponent("Sounds")
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         return dir
+    }
+
+    private func notificationSoundFileName(for ringtone: String) -> String {
+        let normalized = ringtone.lowercased()
+        if Self.ringtoneNames.map({ $0.lowercased() }).contains(normalized) {
+            return "rise_\(normalized).wav"
+        }
+        return "rise_classic.wav"
     }
 
     // MARK: - WAV builder (only used for the silent keep-alive buffer now)

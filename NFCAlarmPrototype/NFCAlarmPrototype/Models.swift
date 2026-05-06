@@ -138,6 +138,7 @@ final class AlarmAppViewModel: ObservableObject {
     init() {
         wakeStreak = UserDefaults.standard.integer(forKey: "wakeStreak")
         loadAlarms()
+        alarms.filter(\.isEnabled).forEach { alarmManager.scheduleAlarm($0) }
         if nfcManager.registeredTagID != nil {
             route = .home
         }
