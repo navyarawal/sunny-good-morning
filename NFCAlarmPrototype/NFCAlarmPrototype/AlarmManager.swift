@@ -9,10 +9,11 @@ final class AlarmManager: NSObject {
     var isAlarmPlaying = false
 
     // Chain length & spacing — Alarmy's documented force-quit fallback technique.
-    // 20 notifications × 6s = 2 min of guaranteed ringing even if the app is killed.
-    // Stays well under iOS's 64-pending-notification cap when combined with multiple alarms.
-    private let chainCount = 20
-    private let chainSpacing: TimeInterval = 6.0
+    // 60 notifications × 30s = 30 min of guaranteed ringing surviving force-quit.
+    // iOS caps pending notifications at 64 per app, so we divide by active alarm count
+    // in scheduleAlarm() when scheduling to stay safely under the cap.
+    private let chainCount = 60
+    private let chainSpacing: TimeInterval = 30.0
 
     // In-app player (loops infinitely while the app process is alive)
     private var audioPlayer: AVAudioPlayer?
@@ -30,7 +31,7 @@ final class AlarmManager: NSObject {
         super.init()
         UNUserNotificationCenter.current().delegate = self
         registerNotificationCategories()
-        copyBundledSoundsToLibrary()
+        SoundLoopGenerator.ensureLoops(ringtoneNames: Self.ringtoneNames)
     }
 
     // MARK: - Permissions
@@ -50,7 +51,9 @@ final class AlarmManager: NSObject {
     // their sounds — this is the only App-Store-safe technique that survives
     // process termination on iOS 17.
 
-    func scheduleAlarm(_ alarm: AlarmItem) {
+    /// Schedules the chain. `activeAlarmsCount` lets the caller cap chain length so
+    /// total pending notifications across all alarms stays under iOS's 64-per-app cap.
+    func scheduleAlarm(_ alarm: AlarmItem, activeAlarmsCount: Int = 1) {
         cancelAlarm(alarm)
         guard alarm.isEnabled else { return }
         guard let firstFire = nextFiringDate(for: alarm) else { return }
@@ -58,7 +61,10 @@ final class AlarmManager: NSObject {
         let soundFilename = notificationSoundFileName(for: alarm.ringtoneName)
         let sound = UNNotificationSound(named: UNNotificationSoundName(rawValue: soundFilename))
 
-        for i in 0..<chainCount {
+        // Cap so multiple alarms don't exceed iOS's 64-pending limit
+        let cap = max(1, chainCount / max(1, activeAlarmsCount))
+
+        for i in 0..<cap {
             let fireDate = firstFire.addingTimeInterval(Double(i) * chainSpacing)
             let delay = fireDate.timeIntervalSinceNow
             guard delay > 0 else { continue }
@@ -75,6 +81,9 @@ final class AlarmManager: NSObject {
             ]
             content.interruptionLevel = .timeSensitive
             content.sound = sound
+            // Unique threadIdentifier per chain link prevents iOS from collapsing
+            // the rapid-fire notifications and suppressing repeat sounds.
+            content.threadIdentifier = "alarm-\(alarm.id.uuidString)-\(i)"
 
             let trigger = UNTimeIntervalNotificationTrigger(timeInterval: delay, repeats: false)
             let id = "alarm-\(alarm.id.uuidString)-chain-\(i)"
@@ -104,6 +113,18 @@ final class AlarmManager: NSObject {
         cancelChain(alarmID: alarmID)
         alarmTriggers[alarmID]?.cancel()
         alarmTriggers.removeValue(forKey: alarmID)
+        if #available(iOS 16.2, *) {
+            LiveActivityController.shared.end(alarmID: alarmID)
+        }
+    }
+
+    /// Starts the Live Activity for a firing alarm. Idempotent — the controller
+    /// no-ops if an Activity already exists for this alarmID. Call from both
+    /// the foreground notification path and the background DispatchWorkItem.
+    private func startLiveActivity(alarmID: String, ringtone: String) {
+        if #available(iOS 16.2, *) {
+            LiveActivityController.shared.start(alarmID: alarmID, label: "Rise & Tap", ringtone: ringtone)
+        }
     }
 
     private func cancelChain(alarmID: String) {
@@ -183,6 +204,7 @@ final class AlarmManager: NSObject {
         let work = DispatchWorkItem { [weak self] in
             guard let self else { return }
             self.startAlarmAudio(volume: alarm.volume, ringtone: alarm.ringtoneName)
+            self.startLiveActivity(alarmID: id, ringtone: alarm.ringtoneName)
             self.onAlarmFired?(id)
         }
         alarmTriggers[id] = work
@@ -298,28 +320,6 @@ final class AlarmManager: NSObject {
         Bundle.main.url(forResource: "rise_\(ringtone.lowercased())", withExtension: "wav")
     }
 
-    // Notification sounds are looked up first in the app bundle, then in
-    // Library/Sounds. We copy bundled WAVs to Library/Sounds at first launch
-    // as a defensive measure — some iOS versions resolve faster from there.
-    private func copyBundledSoundsToLibrary() {
-        guard let dir = soundsDirectory() else { return }
-        for name in Self.ringtoneNames {
-            let filename = "rise_\(name.lowercased()).wav"
-            let dst = dir.appendingPathComponent(filename)
-            guard !FileManager.default.fileExists(atPath: dst.path),
-                  let src = Bundle.main.url(forResource: "rise_\(name.lowercased())", withExtension: "wav")
-            else { continue }
-            try? FileManager.default.copyItem(at: src, to: dst)
-        }
-    }
-
-    private func soundsDirectory() -> URL? {
-        guard let lib = FileManager.default.urls(for: .libraryDirectory, in: .userDomainMask).first else { return nil }
-        let dir = lib.appendingPathComponent("Sounds")
-        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        return dir
-    }
-
     private func notificationSoundFileName(for ringtone: String) -> String {
         let normalized = ringtone.lowercased()
         if Self.ringtoneNames.map({ $0.lowercased() }).contains(normalized) {
@@ -358,10 +358,12 @@ extension AlarmManager: UNUserNotificationCenterDelegate {
         if notification.request.content.categoryIdentifier == "ALARM" {
             let alarmID = notification.request.content.userInfo["alarmID"] as? String ?? ""
             let chainIndex = notification.request.content.userInfo["chainIndex"] as? Int ?? 0
-            DispatchQueue.main.async {
+            let ringtone = notification.request.content.userInfo["ringtone"] as? String ?? "Classic"
+            DispatchQueue.main.async { [weak self] in
                 if chainIndex == 0 {
                     NotificationCenter.default.post(name: .alarmDidFire, object: nil,
                                                    userInfo: ["alarmID": alarmID])
+                    self?.startLiveActivity(alarmID: alarmID, ringtone: ringtone)
                 }
             }
             // First chain notification: in-app loop takes over (suppress notif sound)

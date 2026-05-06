@@ -138,7 +138,8 @@ final class AlarmAppViewModel: ObservableObject {
     init() {
         wakeStreak = UserDefaults.standard.integer(forKey: "wakeStreak")
         loadAlarms()
-        alarms.filter(\.isEnabled).forEach { alarmManager.scheduleAlarm($0) }
+        let active = alarms.filter(\.isEnabled)
+        active.forEach { alarmManager.scheduleAlarm($0, activeAlarmsCount: active.count) }
         if nfcManager.registeredTagID != nil {
             route = .home
         }
@@ -203,25 +204,40 @@ final class AlarmAppViewModel: ObservableObject {
         alarms.append(AlarmItem())
     }
 
+    private var activeAlarmsCount: Int {
+        max(1, alarms.filter(\.isEnabled).count)
+    }
+
+    /// Re-schedule every enabled alarm. Call after any change that affects how
+    /// the chain budget is divided across alarms (add / enable / disable).
+    private func rescheduleAllAlarms() {
+        let enabled = alarms.filter(\.isEnabled)
+        for alarm in enabled {
+            alarmManager.scheduleAlarm(alarm, activeAlarmsCount: enabled.count)
+        }
+    }
+
     func updateAlarm(_ alarm: AlarmItem) {
         if let idx = alarms.firstIndex(where: { $0.id == alarm.id }) {
             alarms[idx] = alarm
-            alarmManager.scheduleAlarm(alarm)
+            alarmManager.scheduleAlarm(alarm, activeAlarmsCount: activeAlarmsCount)
         }
     }
 
     func deleteAlarm(_ alarm: AlarmItem) {
         alarmManager.cancelAlarm(alarm)
         alarms.removeAll { $0.id == alarm.id }
+        rescheduleAllAlarms()
     }
 
     func toggleAlarm(_ alarm: AlarmItem) {
         if let idx = alarms.firstIndex(where: { $0.id == alarm.id }) {
             alarms[idx].isEnabled.toggle()
             if alarms[idx].isEnabled {
-                alarmManager.scheduleAlarm(alarms[idx])
+                alarmManager.scheduleAlarm(alarms[idx], activeAlarmsCount: activeAlarmsCount)
             } else {
                 alarmManager.cancelAlarm(alarms[idx])
+                rescheduleAllAlarms()
             }
         }
     }
@@ -246,7 +262,7 @@ final class AlarmAppViewModel: ObservableObject {
 
     func finishSetup() {
         alarms.append(onboardingAlarm)
-        alarmManager.scheduleAlarm(onboardingAlarm)
+        alarmManager.scheduleAlarm(onboardingAlarm, activeAlarmsCount: activeAlarmsCount)
         route = .home
     }
 
