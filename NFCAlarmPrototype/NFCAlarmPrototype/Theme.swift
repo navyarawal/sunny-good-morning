@@ -128,6 +128,7 @@ struct FrostCard<Content: View>: View {
 
     var body: some View {
         content
+            .foregroundStyle(AppTheme.textDark)
             .background(
                 ZStack {
                     RoundedRectangle(cornerRadius: corner, style: .continuous)

@@ -366,10 +366,6 @@ private struct AlarmListScreen: View {
                 .padding(.top, UI.topInset)
                 .padding(.bottom, 6)
 
-                if let next = nextAlarm {
-                    nextAlarmCard(next)
-                }
-
                 if vm.alarms.isEmpty {
                     FrostCard(corner: 24) {
                         Text("No alarms yet. Tap **+** to set one.")
@@ -384,7 +380,8 @@ private struct AlarmListScreen: View {
                         ForEach(vm.alarms) { alarm in
                             AlarmRow(alarm: alarm,
                                      onTap: { onEdit(alarm) },
-                                     onToggle: { vm.toggleAlarm(alarm) })
+                                     onToggle: { vm.toggleAlarm(alarm) },
+                                     onDelete: { vm.deleteAlarm(alarm) })
                                 .contextMenu {
                                     Button(role: .destructive) {
                                         vm.deleteAlarm(alarm)
@@ -473,6 +470,7 @@ private struct AlarmRow: View {
     let alarm: AlarmItem
     let onTap: () -> Void
     let onToggle: () -> Void
+    let onDelete: () -> Void
 
     var body: some View {
         FrostCard(corner: 22) {
@@ -517,6 +515,17 @@ private struct AlarmRow: View {
                     get: { alarm.isEnabled },
                     set: { _ in onToggle() }
                 ))
+
+                Button(role: .destructive, action: onDelete) {
+                    Image(systemName: "trash")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(Color.red.opacity(0.72))
+                        .frame(width: 36, height: 36)
+                        .background(Color.red.opacity(0.08))
+                        .clipShape(Circle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Delete alarm")
             }
             .padding(.horizontal, 18).padding(.vertical, 16)
         }
@@ -1338,4 +1347,3 @@ private struct FlowLayout: Layout {
         }
     }
 }
-
