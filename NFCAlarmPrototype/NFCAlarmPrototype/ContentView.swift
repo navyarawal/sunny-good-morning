@@ -563,8 +563,9 @@ private struct CreateAlarmFlow: View {
     private let weekdayLetters = ["M", "T", "W", "T", "F", "S", "S"]
 
     var body: some View {
-        // No nested ZStacks — use background + overlay modifiers on a single root.
-        Group {
+        // Single root VStack — predictable top-down layout.
+        // Each step VStack claims .infinity height and lays out header/scroll/buttons explicitly.
+        VStack(spacing: 0) {
             switch step {
             case 1: detailsStep
             case 2: checkInStep
@@ -574,8 +575,7 @@ private struct CreateAlarmFlow: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(SunriseBackground())
         .overlay(alignment: .topLeading) {
-            // BUILD MARKER — small magenta tag, removed once layout verified.
-            Text("v5")
+            Text("v6")
                 .font(.system(size: 9, weight: .black))
                 .foregroundStyle(.white)
                 .padding(.horizontal, 6)
@@ -591,39 +591,8 @@ private struct CreateAlarmFlow: View {
     // MARK: Step 1 — details (sticky header + scrollable body)
 
     private var detailsStep: some View {
-        ScrollView {
-            VStack(spacing: 20) {
-                DatePicker("", selection: $alarm.date, displayedComponents: .hourAndMinute)
-                    .datePickerStyle(.wheel)
-                    .labelsHidden()
-                    .frame(height: 200)
-
-                VStack(spacing: 0) {
-                    repeatRow
-                    Divider().background(AppTheme.textDark.opacity(0.10)).padding(.leading, 18)
-                    labelRow
-                    Divider().background(AppTheme.textDark.opacity(0.10)).padding(.leading, 18)
-                    soundRow
-                }
-                .background(
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .fill(.ultraThinMaterial)
-                        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(.white.opacity(0.45)))
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .strokeBorder(.white.opacity(0.65), lineWidth: 1)
-                )
-                .shadow(color: Color(red: 0.55, green: 0.35, blue: 0.16).opacity(0.08), radius: 12, x: 0, y: 6)
-
-                Spacer(minLength: UI.bottomInset)
-            }
-            .padding(.horizontal, UI.hPad)
-            .padding(.top, 8)
-        }
-        .safeAreaInset(edge: .top, spacing: 0) {
-            // Pinned header — canonical iOS pattern. Sits above the ScrollView,
-            // never scrolls, and reserves its space (ScrollView content slides under it).
+        VStack(spacing: 0) {
+            // HEADER — pinned at top
             HStack {
                 Button("Cancel", action: onCancel)
                     .font(.system(size: 17))
@@ -640,8 +609,41 @@ private struct CreateAlarmFlow: View {
             .padding(.top, UI.topInset)
             .padding(.horizontal, UI.hPad)
             .padding(.bottom, 12)
-            .background(SunriseBackground().opacity(0.0001))  // hit-test fix while keeping background
+
+            // MIDDLE — greedy ScrollView
+            ScrollView {
+                VStack(spacing: 20) {
+                    DatePicker("", selection: $alarm.date, displayedComponents: .hourAndMinute)
+                        .datePickerStyle(.wheel)
+                        .labelsHidden()
+                        .frame(height: 200)
+
+                    VStack(spacing: 0) {
+                        repeatRow
+                        Divider().background(AppTheme.textDark.opacity(0.10)).padding(.leading, 18)
+                        labelRow
+                        Divider().background(AppTheme.textDark.opacity(0.10)).padding(.leading, 18)
+                        soundRow
+                    }
+                    .background(
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .fill(.ultraThinMaterial)
+                            .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(.white.opacity(0.45)))
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .strokeBorder(.white.opacity(0.65), lineWidth: 1)
+                    )
+                    .shadow(color: Color(red: 0.55, green: 0.35, blue: 0.16).opacity(0.08), radius: 12, x: 0, y: 6)
+
+                    Spacer(minLength: UI.bottomInset)
+                }
+                .padding(.horizontal, UI.hPad)
+                .padding(.top, 8)
+            }
+            .frame(maxHeight: .infinity)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private var repeatRow: some View {
@@ -741,55 +743,59 @@ private struct CreateAlarmFlow: View {
     // MARK: Step 2 — check-ins
 
     private var checkInStep: some View {
-        ScrollView {
-            VStack(spacing: 0) {
-                SunMascotView(level: .seedling, mood: .happy, size: 96)
-                    .padding(.top, 18)
-
-                Text("Want wake-up\ncheck-ins?")
-                    .font(.system(size: 26, weight: .bold))
-                    .multilineTextAlignment(.center)
-                    .foregroundStyle(AppTheme.textDark)
-                    .padding(.top, 18)
-                    .lineSpacing(2)
-
-                Text("The alarm can ring a few more times after you dismiss — to make sure you're really up.")
-                    .font(.system(size: 14.5))
-                    .multilineTextAlignment(.center)
-                    .foregroundStyle(AppTheme.textMedium)
-                    .padding(.top, 10)
-                    .padding(.horizontal, 36)
-
-                FrostCard(corner: 22) {
-                    VStack(spacing: 0) {
-                        StepperRow(
-                            label: "Number of check-ins",
-                            value: alarm.checkInRounds,
-                            suffix: alarm.checkInRounds == 1 ? "check-in" : "check-ins",
-                            range: 1...6,
-                            onChange: { alarm.checkInRounds = $0 }
-                        )
-                        Divider().background(AppTheme.textDark.opacity(0.08)).padding(.vertical, 14)
-                        StepperRow(
-                            label: "Every",
-                            value: alarm.checkInIntervalMinutes,
-                            suffix: "minutes",
-                            range: 1...30,
-                            onChange: { alarm.checkInIntervalMinutes = $0 }
-                        )
-                    }
-                    .padding(18)
-                }
-                .padding(.top, 18).padding(.horizontal, UI.hPad)
-
-                Spacer(minLength: 12)
-            }
-            .frame(maxWidth: .infinity)
-        }
-        .safeAreaInset(edge: .top, spacing: 0) {
+        VStack(spacing: 0) {
+            // HEADER
             stepHeader(label: "STEP 2 OF 3", trailing: nil) { step = 1 }
-        }
-        .safeAreaInset(edge: .bottom, spacing: 0) {
+
+            // MIDDLE — greedy ScrollView
+            ScrollView {
+                VStack(spacing: 0) {
+                    SunMascotView(level: .seedling, mood: .happy, size: 96)
+                        .padding(.top, 18)
+
+                    Text("Want wake-up\ncheck-ins?")
+                        .font(.system(size: 26, weight: .bold))
+                        .multilineTextAlignment(.center)
+                        .foregroundStyle(AppTheme.textDark)
+                        .padding(.top, 18)
+                        .lineSpacing(2)
+
+                    Text("The alarm can ring a few more times after you dismiss — to make sure you're really up.")
+                        .font(.system(size: 14.5))
+                        .multilineTextAlignment(.center)
+                        .foregroundStyle(AppTheme.textMedium)
+                        .padding(.top, 10)
+                        .padding(.horizontal, 36)
+
+                    FrostCard(corner: 22) {
+                        VStack(spacing: 0) {
+                            StepperRow(
+                                label: "Number of check-ins",
+                                value: alarm.checkInRounds,
+                                suffix: alarm.checkInRounds == 1 ? "check-in" : "check-ins",
+                                range: 1...6,
+                                onChange: { alarm.checkInRounds = $0 }
+                            )
+                            Divider().background(AppTheme.textDark.opacity(0.08)).padding(.vertical, 14)
+                            StepperRow(
+                                label: "Every",
+                                value: alarm.checkInIntervalMinutes,
+                                suffix: "minutes",
+                                range: 1...30,
+                                onChange: { alarm.checkInIntervalMinutes = $0 }
+                            )
+                        }
+                        .padding(18)
+                    }
+                    .padding(.top, 18).padding(.horizontal, UI.hPad)
+
+                    Spacer(minLength: 12)
+                }
+                .frame(maxWidth: .infinity)
+            }
+            .frame(maxHeight: .infinity)
+
+            // BOTTOM
             HStack(spacing: 10) {
                 Button("Skip") { step = 3 }
                     .buttonStyle(PillButtonStyle(primary: false))
@@ -798,6 +804,7 @@ private struct CreateAlarmFlow: View {
             }
             .padding(.horizontal, UI.hPad).padding(.bottom, UI.bottomInset).padding(.top, 12)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     // Shared header used by steps 2 & 3 — guarantees identical Y position.
@@ -833,34 +840,38 @@ private struct CreateAlarmFlow: View {
     // MARK: Step 3 — NFC placement
 
     private var nfcPlacementStep: some View {
-        ScrollView {
-            VStack(spacing: 22) {
-                NFCBadge(size: 130).padding(.top, 12)
-
-                Text("Place your\nSunny sticker.")
-                    .font(.system(size: 26, weight: .bold))
-                    .multilineTextAlignment(.center)
-                    .foregroundStyle(AppTheme.textDark)
-                    .lineSpacing(2)
-
-                Text("Stick it across the room — somewhere you have to **get out of bed** to reach.")
-                    .font(.system(size: 15))
-                    .multilineTextAlignment(.center)
-                    .foregroundStyle(AppTheme.textMedium)
-                    .padding(.horizontal, 32)
-
-                VStack(spacing: 8) {
-                    placementTip(num: 1, title: "Far from your bed", subtitle: "At least a few steps away.")
-                    placementTip(num: 2, title: "Eye level or lower", subtitle: "Easy to tap with your phone.")
-                    placementTip(num: 3, title: "Smooth, flat surface", subtitle: "Avoid metal — it weakens the signal.")
-                }
-                .padding(.horizontal, UI.hPad)
-            }
-        }
-        .safeAreaInset(edge: .top, spacing: 0) {
+        VStack(spacing: 0) {
+            // HEADER
             stepHeader(label: "STEP 3 OF 3", trailing: "Skip") { step = 2 }
-        }
-        .safeAreaInset(edge: .bottom, spacing: 0) {
+
+            // MIDDLE
+            ScrollView {
+                VStack(spacing: 22) {
+                    NFCBadge(size: 130).padding(.top, 12)
+
+                    Text("Place your\nSunny sticker.")
+                        .font(.system(size: 26, weight: .bold))
+                        .multilineTextAlignment(.center)
+                        .foregroundStyle(AppTheme.textDark)
+                        .lineSpacing(2)
+
+                    Text("Stick it across the room — somewhere you have to **get out of bed** to reach.")
+                        .font(.system(size: 15))
+                        .multilineTextAlignment(.center)
+                        .foregroundStyle(AppTheme.textMedium)
+                        .padding(.horizontal, 32)
+
+                    VStack(spacing: 8) {
+                        placementTip(num: 1, title: "Far from your bed", subtitle: "At least a few steps away.")
+                        placementTip(num: 2, title: "Eye level or lower", subtitle: "Easy to tap with your phone.")
+                        placementTip(num: 3, title: "Smooth, flat surface", subtitle: "Avoid metal — it weakens the signal.")
+                    }
+                    .padding(.horizontal, UI.hPad)
+                }
+            }
+            .frame(maxHeight: .infinity)
+
+            // BOTTOM
             Button(actionTitle) {
                 if vm.registeredStickerID == nil {
                     vm.startNFCRegistration { onSave(alarm) }
@@ -872,6 +883,7 @@ private struct CreateAlarmFlow: View {
             .disabled(vm.isNFCScanning)
             .padding(.horizontal, UI.hPad).padding(.bottom, UI.bottomInset).padding(.top, 12)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private var actionTitle: String {
