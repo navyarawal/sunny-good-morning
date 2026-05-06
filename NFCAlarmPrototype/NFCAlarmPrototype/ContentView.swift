@@ -730,6 +730,7 @@ private struct CreateAlarmFlow: View {
 
     private var checkInStep: some View {
         VStack(spacing: 0) {
+            // Sticky header — same Y as steps 1 and 3
             HStack {
                 Button { step = 1 } label: {
                     HStack(spacing: 4) {
@@ -749,54 +750,62 @@ private struct CreateAlarmFlow: View {
             }
             .padding(.top, UI.topInset).padding(.horizontal, UI.hPad).padding(.bottom, 12)
 
-            SunMascotView(level: .seedling, mood: .happy, size: 96)
-                .padding(.top, 18)
-
-            Text("Want wake-up\ncheck-ins?")
-                .font(.system(size: 26, weight: .bold))
-                .multilineTextAlignment(.center)
-                .foregroundStyle(AppTheme.textDark)
-                .padding(.top, 18)
-                .lineSpacing(2)
-
-            Text("The alarm can ring a few more times after you dismiss — to make sure you're really up.")
-                .font(.system(size: 14.5))
-                .multilineTextAlignment(.center)
-                .foregroundStyle(AppTheme.textMedium)
-                .padding(.top, 10)
-                .padding(.horizontal, 36)
-
-            FrostCard(corner: 22) {
+            // Greedy ScrollView middle — mirrors steps 1 and 3 so the outer
+            // VStack's intrinsic height is unambiguous and the header anchors to top.
+            ScrollView {
                 VStack(spacing: 0) {
-                    StepperRow(
-                        label: "Number of check-ins",
-                        value: alarm.checkInRounds,
-                        suffix: alarm.checkInRounds == 1 ? "check-in" : "check-ins",
-                        range: 1...6,
-                        onChange: { alarm.checkInRounds = $0 }
-                    )
-                    Divider().background(AppTheme.textDark.opacity(0.08)).padding(.vertical, 14)
-                    StepperRow(
-                        label: "Every",
-                        value: alarm.checkInIntervalMinutes,
-                        suffix: "minutes",
-                        range: 1...30,
-                        onChange: { alarm.checkInIntervalMinutes = $0 }
-                    )
+                    SunMascotView(level: .seedling, mood: .happy, size: 96)
+                        .padding(.top, 18)
+
+                    Text("Want wake-up\ncheck-ins?")
+                        .font(.system(size: 26, weight: .bold))
+                        .multilineTextAlignment(.center)
+                        .foregroundStyle(AppTheme.textDark)
+                        .padding(.top, 18)
+                        .lineSpacing(2)
+
+                    Text("The alarm can ring a few more times after you dismiss — to make sure you're really up.")
+                        .font(.system(size: 14.5))
+                        .multilineTextAlignment(.center)
+                        .foregroundStyle(AppTheme.textMedium)
+                        .padding(.top, 10)
+                        .padding(.horizontal, 36)
+
+                    FrostCard(corner: 22) {
+                        VStack(spacing: 0) {
+                            StepperRow(
+                                label: "Number of check-ins",
+                                value: alarm.checkInRounds,
+                                suffix: alarm.checkInRounds == 1 ? "check-in" : "check-ins",
+                                range: 1...6,
+                                onChange: { alarm.checkInRounds = $0 }
+                            )
+                            Divider().background(AppTheme.textDark.opacity(0.08)).padding(.vertical, 14)
+                            StepperRow(
+                                label: "Every",
+                                value: alarm.checkInIntervalMinutes,
+                                suffix: "minutes",
+                                range: 1...30,
+                                onChange: { alarm.checkInIntervalMinutes = $0 }
+                            )
+                        }
+                        .padding(18)
+                    }
+                    .padding(.top, 18).padding(.horizontal, UI.hPad)
+
+                    Spacer(minLength: 12)
                 }
-                .padding(18)
+                .frame(maxWidth: .infinity)
             }
-            .padding(.top, 18).padding(.horizontal, UI.hPad)
 
-            Spacer()
-
+            // Bottom buttons — pinned, outside the ScrollView
             HStack(spacing: 10) {
                 Button("Skip") { step = 3 }
                     .buttonStyle(PillButtonStyle(primary: false))
                 Button("Add check-ins") { step = 3 }
                     .buttonStyle(PillButtonStyle(primary: true))
             }
-            .padding(.horizontal, UI.hPad).padding(.bottom, UI.bottomInset)
+            .padding(.horizontal, UI.hPad).padding(.bottom, UI.bottomInset).padding(.top, 12)
         }
     }
 
