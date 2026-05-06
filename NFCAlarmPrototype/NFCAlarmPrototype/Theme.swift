@@ -89,6 +89,25 @@ enum AppTheme {
     static var currentHour: Int { Calendar.current.component(.hour, from: .now) }
 }
 
+// MARK: - Layout constants — keep top/bottom bars and CTAs aligned across every screen.
+// Named `UI` instead of `Layout` because SwiftUI exports its own `Layout` protocol.
+
+enum UI {
+    /// Top inset below the safe area (status bar / Dynamic Island).
+    /// Headers and page eyebrows sit here.
+    static let topInset: CGFloat = 16
+
+    /// Bottom inset above the safe area (home indicator).
+    /// Primary CTAs and dot indicators sit here.
+    static let bottomInset: CGFloat = 32
+
+    /// Horizontal screen padding — same on every screen so cards/buttons line up.
+    static let hPad: CGFloat = 24
+
+    /// Reserved bottom space when the floating tab bar is visible.
+    static let tabBarSpace: CGFloat = 110
+}
+
 // MARK: - Sunrise background view (gradient + aura)
 
 struct SunriseBackground: View {

@@ -90,8 +90,8 @@ private struct WelcomeStep: View {
                     .buttonStyle(PillButtonStyle())
                 OnboardingDots(count: 4, active: 0)
             }
-            .padding(.horizontal, 28)
-            .padding(.bottom, 56)
+            .padding(.horizontal, UI.hPad)
+            .padding(.bottom, UI.bottomInset)
         }
     }
 }
@@ -125,8 +125,8 @@ private struct NFCIntroStep: View {
                     .buttonStyle(PillButtonStyle())
                 OnboardingDots(count: 4, active: 1)
             }
-            .padding(.horizontal, 28)
-            .padding(.bottom, 56)
+            .padding(.horizontal, UI.hPad)
+            .padding(.bottom, UI.bottomInset)
         }
     }
 }
@@ -221,8 +221,8 @@ private struct CreatePromptStep: View {
                     .buttonStyle(PillButtonStyle())
                 OnboardingDots(count: 4, active: 2)
             }
-            .padding(.horizontal, 28)
-            .padding(.bottom, 56)
+            .padding(.horizontal, UI.hPad)
+            .padding(.bottom, UI.bottomInset)
         }
     }
 }
@@ -363,7 +363,7 @@ private struct AlarmListScreen: View {
                     Spacer()
                 }
                 .padding(.horizontal, 6)
-                .padding(.top, 60)
+                .padding(.top, UI.topInset)
                 .padding(.bottom, 6)
 
                 if let next = nextAlarm {
@@ -396,9 +396,9 @@ private struct AlarmListScreen: View {
                     }
                 }
 
-                Color.clear.frame(height: 110)
+                Color.clear.frame(height: UI.tabBarSpace)
             }
-            .padding(.horizontal, 20)
+            .padding(.horizontal, UI.hPad)
         }
     }
 
@@ -574,52 +574,58 @@ private struct CreateAlarmFlow: View {
         .animation(.easeInOut(duration: 0.25), value: step)
     }
 
-    // MARK: Step 1 — details
+    // MARK: Step 1 — details (sticky header + scrollable body)
 
     private var detailsStep: some View {
-        ScrollView {
-            VStack(spacing: 20) {
-                HStack {
-                    Button("Cancel", action: onCancel)
-                        .font(.system(size: 17))
-                        .foregroundStyle(AppTheme.accent)
-                    Spacer()
-                    Text("Add Alarm")
-                        .font(.system(size: 17, weight: .semibold))
-                        .foregroundStyle(AppTheme.textDark)
-                    Spacer()
-                    Button("Save") { step = 2 }
-                        .font(.system(size: 17, weight: .semibold))
-                        .foregroundStyle(AppTheme.accent)
-                }
-                .padding(.top, 60)
-
-                DatePicker("", selection: $alarm.date, displayedComponents: .hourAndMinute)
-                    .datePickerStyle(.wheel)
-                    .labelsHidden()
-                    .frame(height: 200)
-
-                VStack(spacing: 0) {
-                    repeatRow
-                    Divider().background(AppTheme.textDark.opacity(0.10)).padding(.leading, 18)
-                    labelRow
-                    Divider().background(AppTheme.textDark.opacity(0.10)).padding(.leading, 18)
-                    soundRow
-                }
-                .background(
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .fill(.ultraThinMaterial)
-                        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(.white.opacity(0.45)))
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .strokeBorder(.white.opacity(0.65), lineWidth: 1)
-                )
-                .shadow(color: Color(red: 0.55, green: 0.35, blue: 0.16).opacity(0.08), radius: 12, x: 0, y: 6)
-
-                Spacer(minLength: 80)
+        VStack(spacing: 0) {
+            // Sticky header — same Y as steps 2/3
+            HStack {
+                Button("Cancel", action: onCancel)
+                    .font(.system(size: 17))
+                    .foregroundStyle(AppTheme.accent)
+                Spacer()
+                Text("Add Alarm")
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(AppTheme.textDark)
+                Spacer()
+                Button("Save") { step = 2 }
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(AppTheme.accent)
             }
-            .padding(.horizontal, 20)
+            .padding(.top, UI.topInset)
+            .padding(.horizontal, UI.hPad)
+            .padding(.bottom, 12)
+
+            ScrollView {
+                VStack(spacing: 20) {
+                    DatePicker("", selection: $alarm.date, displayedComponents: .hourAndMinute)
+                        .datePickerStyle(.wheel)
+                        .labelsHidden()
+                        .frame(height: 200)
+
+                    VStack(spacing: 0) {
+                        repeatRow
+                        Divider().background(AppTheme.textDark.opacity(0.10)).padding(.leading, 18)
+                        labelRow
+                        Divider().background(AppTheme.textDark.opacity(0.10)).padding(.leading, 18)
+                        soundRow
+                    }
+                    .background(
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .fill(.ultraThinMaterial)
+                            .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(.white.opacity(0.45)))
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .strokeBorder(.white.opacity(0.65), lineWidth: 1)
+                    )
+                    .shadow(color: Color(red: 0.55, green: 0.35, blue: 0.16).opacity(0.08), radius: 12, x: 0, y: 6)
+
+                    Spacer(minLength: UI.bottomInset)
+                }
+                .padding(.horizontal, UI.hPad)
+                .padding(.top, 8)
+            }
         }
     }
 
@@ -738,10 +744,10 @@ private struct CreateAlarmFlow: View {
                 Spacer()
                 Color.clear.frame(width: 60)
             }
-            .padding(.top, 60).padding(.horizontal, 24)
+            .padding(.top, UI.topInset).padding(.horizontal, UI.hPad).padding(.bottom, 12)
 
             SunMascotView(level: .seedling, mood: .happy, size: 96)
-                .padding(.top, 30)
+                .padding(.top, 18)
 
             Text("Want wake-up\ncheck-ins?")
                 .font(.system(size: 26, weight: .bold))
@@ -777,7 +783,7 @@ private struct CreateAlarmFlow: View {
                 }
                 .padding(18)
             }
-            .padding(.top, 18).padding(.horizontal, 24)
+            .padding(.top, 18).padding(.horizontal, UI.hPad)
 
             Spacer()
 
@@ -787,7 +793,7 @@ private struct CreateAlarmFlow: View {
                 Button("Add check-ins") { step = 3 }
                     .buttonStyle(PillButtonStyle(primary: true))
             }
-            .padding(.horizontal, 24).padding(.bottom, 56)
+            .padding(.horizontal, UI.hPad).padding(.bottom, UI.bottomInset)
         }
     }
 
@@ -814,11 +820,11 @@ private struct CreateAlarmFlow: View {
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundStyle(AppTheme.accent)
             }
-            .padding(.top, 60).padding(.horizontal, 24)
+            .padding(.top, UI.topInset).padding(.horizontal, UI.hPad).padding(.bottom, 12)
 
             ScrollView {
                 VStack(spacing: 22) {
-                    NFCBadge(size: 130).padding(.top, 24)
+                    NFCBadge(size: 130).padding(.top, 12)
 
                     Text("Place your\nSunny sticker.")
                         .font(.system(size: 26, weight: .bold))
@@ -837,7 +843,7 @@ private struct CreateAlarmFlow: View {
                         placementTip(num: 2, title: "Eye level or lower", subtitle: "Easy to tap with your phone.")
                         placementTip(num: 3, title: "Smooth, flat surface", subtitle: "Avoid metal — it weakens the signal.")
                     }
-                    .padding(.horizontal, 24)
+                    .padding(.horizontal, UI.hPad)
                 }
             }
 
@@ -850,7 +856,7 @@ private struct CreateAlarmFlow: View {
             }
             .buttonStyle(PillButtonStyle(primary: true))
             .disabled(vm.isNFCScanning)
-            .padding(.horizontal, 24).padding(.bottom, 56).padding(.top, 12)
+            .padding(.horizontal, UI.hPad).padding(.bottom, UI.bottomInset).padding(.top, 12)
         }
     }
 
@@ -889,7 +895,7 @@ private struct ProfileScreen: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 0) {
-                Spacer().frame(height: 60)
+                Spacer().frame(height: UI.topInset)
 
                 VStack(spacing: 18) {
                     SunMascotView(level: vm.sunLevel, mood: .happy, size: 170)
@@ -904,13 +910,13 @@ private struct ProfileScreen: View {
                         .foregroundStyle(AppTheme.textDark)
                 }
 
-                tierCard.padding(.horizontal, 20).padding(.top, 22)
+                tierCard.padding(.horizontal, UI.hPad).padding(.top, 22)
 
                 growthLadder.padding(.top, 22)
 
-                statsGrid.padding(.horizontal, 20).padding(.top, 22)
+                statsGrid.padding(.horizontal, UI.hPad).padding(.top, 22)
 
-                Spacer().frame(height: 110)
+                Spacer().frame(height: UI.tabBarSpace)
             }
         }
     }
@@ -993,7 +999,7 @@ private struct ProfileScreen: View {
                         tierCell(tier)
                     }
                 }
-                .padding(.horizontal, 20)
+                .padding(.horizontal, UI.hPad)
             }
         }
     }
@@ -1121,7 +1127,7 @@ private struct AlarmRingingScreen: View {
                             .foregroundStyle(.white)
                     }
                 }
-                .padding(.horizontal, 28).padding(.bottom, 52)
+                .padding(.horizontal, UI.hPad).padding(.bottom, UI.bottomInset)
             }
         }
     }
@@ -1157,7 +1163,7 @@ private struct CheckInScreen: View {
 
                 Button("Yes, I'm up!") { vm.confirmAwake() }
                     .buttonStyle(PillButtonStyle(primary: true))
-                    .padding(.horizontal, 28).padding(.bottom, 52)
+                    .padding(.horizontal, UI.hPad).padding(.bottom, UI.bottomInset)
             }
         }
     }
@@ -1200,7 +1206,7 @@ private struct LevelUpScreen: View {
 
                 Button("Keep going!") { vm.dismissLevelUp() }
                     .buttonStyle(PillButtonStyle(primary: true))
-                    .padding(.horizontal, 28).padding(.bottom, 52)
+                    .padding(.horizontal, UI.hPad).padding(.bottom, UI.bottomInset)
                     .opacity(appeared ? 1 : 0)
             }
         }
