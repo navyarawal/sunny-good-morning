@@ -563,13 +563,16 @@ private struct CreateAlarmFlow: View {
     private let weekdayLetters = ["M", "T", "W", "T", "F", "S", "S"]
 
     var body: some View {
-        ZStack {
+        ZStack(alignment: .top) {
             SunriseBackground()
-            switch step {
-            case 1: detailsStep
-            case 2: checkInStep
-            default: nfcPlacementStep
+            Group {
+                switch step {
+                case 1: detailsStep
+                case 2: checkInStep
+                default: nfcPlacementStep
+                }
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         }
         .animation(.easeInOut(duration: 0.25), value: step)
     }
