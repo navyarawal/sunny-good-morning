@@ -86,6 +86,7 @@ struct AlarmItem: Identifiable, Codable {
     var checkInRounds: Int = 2
     var volume: Float = 0.8
     var ringtoneName: String = "Classic"
+    var label: String = ""
 
     var timeText: String {
         date.formatted(date: .omitted, time: .shortened)

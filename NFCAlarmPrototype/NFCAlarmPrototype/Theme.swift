@@ -1,42 +1,71 @@
 import SwiftUI
 
-// MARK: - Color Palette
+// MARK: - Design tokens (Sunny — sunrise gradient + Dawnfire/Zenith accents)
 
 enum AppTheme {
-    static let sunYellow    = Color(red: 1.00, green: 0.82, blue: 0.20)
-    static let sunAmber     = Color(red: 0.98, green: 0.56, blue: 0.05)
+    // Brand colors lifted from Sunny design tokens
+    static let textDark    = Color(red: 0.227, green: 0.165, blue: 0.102)   // #3A2A1A
+    static let textMedium  = Color.black.opacity(0.55)
+    static let textLight   = Color.black.opacity(0.32)
+    static let accent      = Color(red: 0.910, green: 0.525, blue: 0.122)   // #E8861F  Dawnfire
+    static let accent2     = Color(red: 0.941, green: 0.725, blue: 0.118)   // #F0B91E  Zenith
+    static let accentHi    = Color(red: 0.973, green: 0.635, blue: 0.243)   // #F8A23E  light Dawnfire
+    static let accentLow   = Color(red: 0.780, green: 0.416, blue: 0.078)   // #C76A14  dark Dawnfire
+    static let bgCard      = Color.white
+
+    // Legacy aliases — keep so existing call sites still compile
+    static let sunYellow   = accent2
+    static let sunAmber    = accent
     static let morningPeach = Color(red: 1.00, green: 0.86, blue: 0.68)
     static let sunriseBlue  = Color(red: 0.78, green: 0.89, blue: 0.96)
     static let cream        = Color(red: 1.00, green: 0.98, blue: 0.91)
     static let creamWarm    = Color(red: 1.00, green: 0.93, blue: 0.82)
     static let deepNight    = Color(red: 0.09, green: 0.08, blue: 0.19)
-    static let textDark     = Color(red: 0.12, green: 0.10, blue: 0.22)
-    static let textMedium   = Color(red: 0.45, green: 0.42, blue: 0.55)
-    static let textLight    = Color(red: 0.68, green: 0.65, blue: 0.74)
-    static let bgCard       = Color(red: 1.00, green: 0.99, blue: 0.94)
 
-    // MARK: Time-adaptive home gradient
-    static func homeGradient(hour: Int) -> LinearGradient {
-        switch hour {
-        case 5..<10:
-            return LinearGradient(
-                colors: [sunriseBlue, Color(red: 1.00, green: 0.88, blue: 0.70)],
-                startPoint: .top, endPoint: .bottom)
-        case 10..<17:
-            return LinearGradient(
-                colors: [Color(red: 0.72, green: 0.87, blue: 0.97), Color(red: 1.00, green: 0.90, blue: 0.72)],
-                startPoint: .top, endPoint: .bottom)
-        case 17..<21:
-            return LinearGradient(
-                colors: [Color(red: 0.63, green: 0.66, blue: 0.78), Color(red: 1.00, green: 0.74, blue: 0.55)],
-                startPoint: .top, endPoint: .bottom)
-        default:
-            return LinearGradient(
-                colors: [Color(red: 0.42, green: 0.43, blue: 0.53), Color(red: 1.00, green: 0.78, blue: 0.60)],
-                startPoint: .top, endPoint: .bottom)
-        }
+    // MARK: Sunrise gradient
+
+    static var sunriseBackground: LinearGradient {
+        LinearGradient(
+            stops: [
+                .init(color: Color(red: 1.00, green: 0.702, blue: 0.416), location: 0.00),  // #FFB36A
+                .init(color: Color(red: 1.00, green: 0.788, blue: 0.478), location: 0.18),  // #FFC97A
+                .init(color: Color(red: 1.00, green: 0.878, blue: 0.541), location: 0.38),  // #FFE08A
+                .init(color: Color(red: 0.988, green: 0.929, blue: 0.690), location: 0.55), // #FCEDB0
+                .init(color: Color(red: 0.863, green: 0.910, blue: 0.910), location: 0.75), // #DCE8E8
+                .init(color: Color(red: 0.718, green: 0.808, blue: 0.878), location: 1.00)  // #B7CEE0
+            ],
+            startPoint: .top,
+            endPoint: .bottom
+        )
     }
 
+    // Layered radial aura that sits over the gradient (top-center sun glow)
+    static var sunriseAura: RadialGradient {
+        RadialGradient(
+            colors: [Color(red: 1.0, green: 0.78, blue: 0.47).opacity(0.35), .clear],
+            center: .top,
+            startRadius: 10,
+            endRadius: 420
+        )
+    }
+
+    // Pill button gradient
+    static var pillGradient: LinearGradient {
+        LinearGradient(
+            colors: [accentHi, accent, accentLow],
+            startPoint: .topLeading, endPoint: .bottomTrailing
+        )
+    }
+
+    // Toggle / chip gradient (lighter than pill)
+    static var chipGradient: LinearGradient {
+        LinearGradient(
+            colors: [accentHi, accent],
+            startPoint: .topLeading, endPoint: .bottomTrailing
+        )
+    }
+
+    // Alarm-ringing screen — warm orange (kept matched to design accents)
     static let alarmGradient = LinearGradient(
         colors: [Color(red: 1.00, green: 0.40, blue: 0.20), Color(red: 1.00, green: 0.65, blue: 0.30)],
         startPoint: .top, endPoint: .bottom)
@@ -45,62 +74,149 @@ enum AppTheme {
         colors: [Color(red: 0.88, green: 1.00, blue: 0.78), Color(red: 0.72, green: 0.98, blue: 0.60)],
         startPoint: .top, endPoint: .bottom)
 
-    // MARK: Helpers
+    // Legacy: callers in existing screens — return the new sunrise gradient regardless of hour
+    static func homeGradient(hour: Int) -> LinearGradient { sunriseBackground }
+
     static func greeting(hour: Int) -> String {
         switch hour {
         case 5..<12:  return "Good morning"
         case 12..<17: return "Good afternoon"
         case 17..<21: return "Good evening"
-        default:      return "Up late?"
+        default:      return "Good night"
         }
     }
 
     static var currentHour: Int { Calendar.current.component(.hour, from: .now) }
 }
 
-// MARK: - Button Styles
+// MARK: - Sunrise background view (gradient + aura)
 
-struct PrimaryButtonStyle: ButtonStyle {
-    var color: Color = AppTheme.textDark
-
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(.system(.headline, design: .rounded, weight: .bold))
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 16)
-            .foregroundStyle(.white)
-            .background(color.opacity(configuration.isPressed ? 0.75 : 1))
-            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-            .scaleEffect(configuration.isPressed ? 0.97 : 1)
-            .animation(.spring(duration: 0.15), value: configuration.isPressed)
+struct SunriseBackground: View {
+    var body: some View {
+        ZStack {
+            AppTheme.sunriseBackground
+            AppTheme.sunriseAura
+        }
+        .ignoresSafeArea()
     }
 }
 
-struct SecondaryButtonStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(.system(.subheadline, design: .rounded, weight: .semibold))
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 14)
-            .foregroundStyle(AppTheme.textDark)
-            .background(AppTheme.bgCard)
-            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(AppTheme.textDark.opacity(0.10), lineWidth: 1.5))
-            .scaleEffect(configuration.isPressed ? 0.97 : 1)
-            .animation(.spring(duration: 0.15), value: configuration.isPressed)
-    }
-}
+// MARK: - Frost card (translucent white over the sunrise gradient)
 
-// MARK: - Card container
-
-struct SunCard<Content: View>: View {
+struct FrostCard<Content: View>: View {
+    var corner: CGFloat = 22
     @ViewBuilder let content: Content
 
     var body: some View {
         content
-            .padding(16)
-            .background(AppTheme.bgCard)
-            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-            .shadow(color: .black.opacity(0.05), radius: 10, x: 0, y: 4)
+            .background(
+                ZStack {
+                    RoundedRectangle(cornerRadius: corner, style: .continuous)
+                        .fill(.ultraThinMaterial)
+                    RoundedRectangle(cornerRadius: corner, style: .continuous)
+                        .fill(.white.opacity(0.45))
+                }
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: corner, style: .continuous)
+                    .strokeBorder(.white.opacity(0.7), lineWidth: 1)
+            )
+            .shadow(color: Color(red: 0.55, green: 0.35, blue: 0.16).opacity(0.10), radius: 12, x: 0, y: 6)
+    }
+}
+
+// Legacy alias — old screens use SunCard with internal padding
+struct SunCard<Content: View>: View {
+    @ViewBuilder let content: Content
+    var body: some View {
+        FrostCard { content.padding(16) }
+    }
+}
+
+// MARK: - Pill button (primary orange / secondary frost)
+
+struct PillButtonStyle: ButtonStyle {
+    var primary: Bool = true
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.system(size: 17, weight: .semibold))
+            .frame(maxWidth: .infinity)
+            .frame(height: 54)
+            .foregroundStyle(primary ? .white : AppTheme.textDark)
+            .background(
+                Group {
+                    if primary {
+                        AppTheme.pillGradient
+                    } else {
+                        Color.white.opacity(0.5)
+                    }
+                }
+            )
+            .clipShape(Capsule())
+            .overlay(
+                Capsule().strokeBorder(
+                    primary ? .clear : AppTheme.textDark.opacity(0.12),
+                    lineWidth: 1
+                )
+            )
+            .shadow(color: primary ? Color(red: 0.86, green: 0.43, blue: 0.12).opacity(0.32) : .clear,
+                    radius: 8, x: 0, y: 6)
+            .scaleEffect(configuration.isPressed ? 0.97 : 1)
+            .animation(.spring(duration: 0.18), value: configuration.isPressed)
+    }
+}
+
+// Legacy aliases — old code references PrimaryButtonStyle(color:) and SecondaryButtonStyle()
+struct PrimaryButtonStyle: ButtonStyle {
+    var color: Color = AppTheme.accent
+    func makeBody(configuration: Configuration) -> some View {
+        PillButtonStyle(primary: true).makeBody(configuration: configuration)
+    }
+}
+struct SecondaryButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        PillButtonStyle(primary: false).makeBody(configuration: configuration)
+    }
+}
+
+// MARK: - Onboarding progress dots
+
+struct OnboardingDots: View {
+    let count: Int
+    let active: Int
+    var body: some View {
+        HStack(spacing: 6) {
+            ForEach(0..<count, id: \.self) { i in
+                Capsule()
+                    .fill(i == active ? AppTheme.accent : Color.black.opacity(0.18))
+                    .frame(width: i == active ? 22 : 6, height: 6)
+                    .animation(.spring(duration: 0.3), value: active)
+            }
+        }
+    }
+}
+
+// MARK: - Sunny-style toggle (orange gradient on)
+
+struct SunnyToggle: View {
+    @Binding var isOn: Bool
+
+    var body: some View {
+        Button {
+            withAnimation(.spring(duration: 0.25)) { isOn.toggle() }
+        } label: {
+            ZStack(alignment: isOn ? .trailing : .leading) {
+                Capsule()
+                    .fill(isOn ? AnyShapeStyle(AppTheme.chipGradient) : AnyShapeStyle(Color.gray.opacity(0.30)))
+                    .frame(width: 51, height: 31)
+                Circle()
+                    .fill(.white)
+                    .frame(width: 27, height: 27)
+                    .shadow(color: .black.opacity(0.15), radius: 2, x: 0, y: 1)
+                    .padding(2)
+            }
+        }
+        .buttonStyle(.plain)
     }
 }

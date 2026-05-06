@@ -11,7 +11,7 @@ struct ContentView: View {
             case .onboarding:
                 OnboardingFlow()
             case .home:
-                MainTabView()
+                MainTabsView()
             case .alarmRinging:
                 AlarmRingingScreen()
                     .transition(.opacity)
@@ -27,20 +27,34 @@ struct ContentView: View {
     }
 }
 
-// MARK: - Onboarding
+// MARK: - Onboarding (4 steps)
+
+private enum OnboardStep: Int { case welcome, nfcIntro, createPrompt, createAlarm }
 
 private struct OnboardingFlow: View {
     @EnvironmentObject private var vm: AlarmAppViewModel
-    @State private var step = 0
+    @State private var step: OnboardStep = .welcome
 
     var body: some View {
         ZStack {
-            AppTheme.homeGradient(hour: AppTheme.currentHour).ignoresSafeArea()
+            SunriseBackground()
             switch step {
-            case 0: WelcomeStep { step = 1 }
-            case 1: AlarmSetupStep { step = 2 }
-            case 2: NFCSetupStep { vm.finishSetup() }
-            default: EmptyView()
+            case .welcome:
+                WelcomeStep { vm.requestPermissions(); step = .nfcIntro }
+            case .nfcIntro:
+                NFCIntroStep { step = .createPrompt }
+            case .createPrompt:
+                CreatePromptStep { step = .createAlarm }
+            case .createAlarm:
+                CreateAlarmFlow(
+                    initialAlarm: vm.onboardingAlarm,
+                    isOnboarding: true,
+                    onCancel: { step = .createPrompt },
+                    onSave: { alarm in
+                        vm.onboardingAlarm = alarm
+                        vm.finishSetup()
+                    }
+                )
             }
         }
         .animation(.easeInOut(duration: 0.3), value: step)
@@ -48,521 +62,412 @@ private struct OnboardingFlow: View {
 }
 
 private struct WelcomeStep: View {
-    var onContinue: () -> Void
-    @EnvironmentObject private var vm: AlarmAppViewModel
+    var onNext: () -> Void
 
     var body: some View {
         VStack(spacing: 0) {
             Spacer()
-            SunMascotView(level: .seedling, mood: .idle, size: 150)
-                .padding(.bottom, 28)
-            Text("Rise & Tap")
-                .font(.system(size: 38, weight: .black, design: .rounded))
-                .foregroundStyle(AppTheme.textDark)
-            Text("Wake up for real.\nFind Sunny to prove you're out of bed.")
-                .font(.system(.body, design: .rounded))
-                .multilineTextAlignment(.center)
-                .foregroundStyle(AppTheme.textMedium)
-                .padding(.top, 10)
-                .padding(.horizontal, 32)
-            Spacer()
-            VStack(spacing: 12) {
-                Button("Get Started") {
-                    vm.requestPermissions()
-                    onContinue()
-                }
-                .buttonStyle(PrimaryButtonStyle(color: AppTheme.textDark))
-            }
-            .padding(.horizontal, 24)
-            .padding(.bottom, 40)
-        }
-    }
-}
+            SunMascotView(level: .seedling, mood: .happy, size: 180)
+                .padding(.bottom, 48)
 
-private struct AlarmSetupStep: View {
-    var onContinue: () -> Void
-    @EnvironmentObject private var vm: AlarmAppViewModel
-
-    var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
-                Text("Set Your Alarm")
-                    .font(.system(size: 30, weight: .black, design: .rounded))
+            VStack(spacing: 0) {
+                Text("Welcome to")
+                    .font(.system(size: 38, weight: .bold))
                     .foregroundStyle(AppTheme.textDark)
-                    .padding(.top, 56)
-
-                SunCard {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Label("Wake Time", systemImage: "clock.fill")
-                            .font(.system(.caption, design: .rounded, weight: .semibold))
-                            .foregroundStyle(AppTheme.textMedium)
-                        DatePicker("", selection: $vm.onboardingAlarm.date, displayedComponents: .hourAndMinute)
-                            .datePickerStyle(.wheel)
-                            .labelsHidden()
-                            .colorScheme(.light)
-                            .frame(maxWidth: .infinity)
-                    }
-                }
-
-                SunCard {
-                    VStack(alignment: .leading, spacing: 12) {
-                        Label("Repeat Days", systemImage: "calendar")
-                            .font(.system(.caption, design: .rounded, weight: .semibold))
-                            .foregroundStyle(AppTheme.textMedium)
-                        RepeatDayPicker(days: $vm.onboardingAlarm.repeatDays)
-                    }
-                }
-
-                SunCard {
-                    VStack(alignment: .leading, spacing: 10) {
-                        Label("Check-In Safety Net", systemImage: "checkmark.shield.fill")
-                            .font(.system(.caption, design: .rounded, weight: .semibold))
-                            .foregroundStyle(AppTheme.textMedium)
-                        Stepper(
-                            "Rounds: \(vm.onboardingAlarm.checkInRounds)",
-                            value: $vm.onboardingAlarm.checkInRounds, in: 1...5
-                        )
-                        .font(.system(.subheadline, design: .rounded))
-                        Text("After each tap, Sunny will check back in \(vm.onboardingAlarm.checkInIntervalMinutes) min.")
-                            .font(.system(.caption, design: .rounded))
-                            .foregroundStyle(AppTheme.textLight)
-                    }
-                }
-
-                Button("Next: Set Up Sunny's Spot") { onContinue() }
-                    .buttonStyle(PrimaryButtonStyle(color: AppTheme.sunAmber))
-                    .padding(.top, 4)
-                    .padding(.bottom, 40)
+                Text("Sunny.")
+                    .font(.system(size: 38, weight: .bold))
+                    .foregroundStyle(AppTheme.pillGradient)
             }
-            .padding(.horizontal, 20)
+            Text("We help you wake up on time.")
+                .font(.system(size: 17))
+                .foregroundStyle(AppTheme.textMedium)
+                .padding(.top, 14)
+
+            Spacer()
+
+            VStack(spacing: 18) {
+                Button("Get started", action: onNext)
+                    .buttonStyle(PillButtonStyle())
+                OnboardingDots(count: 4, active: 0)
+            }
+            .padding(.horizontal, 28)
+            .padding(.bottom, 56)
         }
     }
 }
 
-private struct NFCSetupStep: View {
-    var onDone: () -> Void
-    @EnvironmentObject private var vm: AlarmAppViewModel
-    @State private var registered = false
+private struct NFCIntroStep: View {
+    var onNext: () -> Void
 
     var body: some View {
         VStack(spacing: 0) {
             Spacer()
-            SunMascotView(level: .seedling, mood: registered ? .happy : .idle, size: 130)
-                .padding(.bottom, 28)
+            NFCBadge(size: 130)
+                .padding(.bottom, 36)
 
-            Text("Set Up Sunny's Spot")
-                .font(.system(size: 28, weight: .black, design: .rounded))
+            Text("Wake up in\none tap.")
+                .font(.system(size: 32, weight: .bold))
+                .multilineTextAlignment(.center)
                 .foregroundStyle(AppTheme.textDark)
-            Text("Put Sunny's sticker somewhere far from your bed — bathroom, kitchen, front door.\nTap below to link it.")
-                .font(.system(.subheadline, design: .rounded))
+                .lineSpacing(2)
+
+            Text("Stick a Sunny tag across the room.\nTap your phone to it to dismiss the alarm — no more snooze.")
+                .font(.system(size: 16))
                 .multilineTextAlignment(.center)
                 .foregroundStyle(AppTheme.textMedium)
-                .padding(.top, 10)
-                .padding(.horizontal, 28)
-
-            if let id = vm.registeredStickerID, registered {
-                SunCard {
-                    HStack(spacing: 12) {
-                        Image(systemName: "checkmark.circle.fill")
-                            .foregroundStyle(.green)
-                            .font(.title2)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Sunny's spot is set!")
-                                .font(.system(.subheadline, design: .rounded, weight: .bold))
-                            Text("ID: \(id)")
-                                .font(.system(.caption2, design: .monospaced))
-                                .foregroundStyle(AppTheme.textLight)
-                        }
-                        Spacer()
-                    }
-                }
-                .padding(.horizontal, 24)
-                .padding(.top, 20)
-            }
-
-            if let err = vm.nfcError {
-                Text(err)
-                    .font(.system(.caption, design: .rounded))
-                    .foregroundStyle(.red)
-                    .padding(.top, 12)
-            }
+                .padding(.top, 14)
+                .padding(.horizontal, 32)
 
             Spacer()
 
-            VStack(spacing: 12) {
-                if !registered {
-                    Button(vm.isNFCScanning ? "Scanning…" : "Link Sunny's Spot") {
-                        vm.startNFCRegistration { registered = true }
-                    }
-                    .buttonStyle(PrimaryButtonStyle(color: AppTheme.sunAmber))
-                    .disabled(vm.isNFCScanning)
-                }
-
-                if registered {
-                    Button("Let's go!") { onDone() }
-                        .buttonStyle(PrimaryButtonStyle(color: AppTheme.textDark))
-                } else {
-                    Button("Skip for now") { onDone() }
-                        .buttonStyle(SecondaryButtonStyle())
-                }
+            VStack(spacing: 18) {
+                Button("Continue", action: onNext)
+                    .buttonStyle(PillButtonStyle())
+                OnboardingDots(count: 4, active: 1)
             }
-            .padding(.horizontal, 24)
-            .padding(.bottom, 40)
+            .padding(.horizontal, 28)
+            .padding(.bottom, 56)
         }
     }
 }
 
-// MARK: - Main Tab View
-
-private struct MainTabView: View {
-    @State private var selectedTab: AppTab = .home
-
-    var body: some View {
-        ZStack(alignment: .bottom) {
-            Group {
-                switch selectedTab {
-                case .home:
-                    HomeTab()
-                case .alarm:
-                    AlarmTab()
-                case .growth:
-                    StatsTab()
-                }
-            }
-            SunriseTabBar(selectedTab: $selectedTab)
-                .padding(.horizontal, 44)
-                .padding(.bottom, 16)
-        }
-    }
-}
-
-private enum AppTab: CaseIterable {
-    case home, alarm, growth
-
-    var title: String {
-        switch self {
-        case .home: return "Home"
-        case .alarm: return "Alarm"
-        case .growth: return "Growth"
-        }
-    }
-
-    var icon: String {
-        switch self {
-        case .home: return "sun.max.fill"
-        case .alarm: return "alarm.fill"
-        case .growth: return "chart.bar.fill"
-        }
-    }
-}
-
-private struct SunriseTabBar: View {
-    @Binding var selectedTab: AppTab
-
-    var body: some View {
-        HStack(spacing: 8) {
-            ForEach(AppTab.allCases, id: \.self) { tab in
-                Button {
-                    selectedTab = tab
-                } label: {
-                    VStack(spacing: 3) {
-                        Image(systemName: tab.icon)
-                            .font(.system(size: 16, weight: .bold))
-                        Text(tab.title)
-                            .font(.system(size: 9, weight: .bold, design: .rounded))
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 8)
-                    .foregroundStyle(selectedTab == tab ? AppTheme.sunAmber : Color.white.opacity(0.72))
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-            }
-        }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
-        .background(AppTheme.deepNight)
-        .clipShape(Capsule())
-        .shadow(color: .black.opacity(0.22), radius: 14, x: 0, y: 8)
-    }
-}
-
-// MARK: - Home Tab
-
-private struct HomeTab: View {
-    @EnvironmentObject private var vm: AlarmAppViewModel
-    private let hour = AppTheme.currentHour
-
+private struct NFCBadge: View {
+    let size: CGFloat
     var body: some View {
         ZStack {
-            AppTheme.homeGradient(hour: hour).ignoresSafeArea()
-            ScrollView {
-                VStack(spacing: 16) {
-                    HStack {
-                        Text("Growth")
-                            .font(.system(size: 26, weight: .black, design: .rounded))
-                            .foregroundStyle(.white)
-                        Spacer()
-                        Text(Date.now.formatted(.dateTime.hour().minute()))
-                            .font(.system(.caption, design: .rounded, weight: .bold))
-                            .foregroundStyle(AppTheme.textDark.opacity(0.70))
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 7)
-                            .background(.white.opacity(0.45))
-                            .clipShape(Capsule())
-                    }
-                    .padding(.top, 58)
+            Circle()
+                .fill(
+                    RadialGradient(
+                        colors: [
+                            Color(red: 1.00, green: 0.914, blue: 0.627),
+                            Color(red: 1.00, green: 0.761, blue: 0.278),
+                            Color(red: 0.910, green: 0.525, blue: 0.122)
+                        ],
+                        center: UnitPoint(x: 0.5, y: 0.4),
+                        startRadius: 0, endRadius: size * 0.7
+                    )
+                )
+                .frame(width: size, height: size)
+                .shadow(color: Color(red: 0.86, green: 0.43, blue: 0.12).opacity(0.35), radius: 14, x: 0, y: 12)
 
-                    SunCard {
-                        VStack(spacing: 12) {
-                            SunMascotView(level: vm.sunLevel, mood: vm.sunMood, size: 142)
-                                .padding(.top, 4)
-                            Text(vm.sunLevel.title)
-                                .font(.system(.title3, design: .rounded, weight: .black))
-                                .foregroundStyle(AppTheme.textDark)
-                            Text(vm.sunLevel.subtitle)
-                                .font(.system(.caption, design: .rounded, weight: .medium))
-                                .foregroundStyle(AppTheme.textMedium)
-                                .multilineTextAlignment(.center)
-                            levelProgressBar
-                                .padding(.top, 4)
-                        }
-                        .frame(maxWidth: .infinity)
+            HStack(spacing: size * 0.04) {
+                Circle().fill(.white).frame(width: size * 0.07, height: size * 0.07)
+                ForEach(0..<3, id: \.self) { i in
+                    Path { p in
+                        p.move(to: .zero)
+                        p.addQuadCurve(
+                            to: CGPoint(x: 0, y: size * 0.30),
+                            control: CGPoint(x: size * 0.10, y: size * 0.15)
+                        )
                     }
-
-                    HStack(spacing: 14) {
-                        infoCard(icon: "flame.fill", title: "\(vm.wakeStreak)", value: "day streak", accent: AppTheme.sunAmber)
-                        infoCard(icon: "alarm.fill", title: vm.nextAlarmText, value: "next alarm", accent: AppTheme.sunAmber)
-                    }
-
-                    SunCard {
-                        VStack(alignment: .leading, spacing: 14) {
-                            Text("All Levels")
-                                .font(.system(.headline, design: .rounded, weight: .bold))
-                                .foregroundStyle(AppTheme.textDark)
-                            ForEach(SunLevel.allCases.prefix(3), id: \.rawValue) { level in
-                                compactLevelRow(level)
-                            }
-                        }
-                    }
-                }
-                .padding(.horizontal, 22)
-                .padding(.bottom, 112)
-            }
-        }
-    }
-
-    private var levelProgressBar: some View {
-        let current = vm.sunLevel
-        let threshold = current.streakThreshold
-        let nextThreshold = current.nextThreshold
-        let progress = current == .legendary ? 1 : Double(vm.wakeStreak - threshold) / Double(nextThreshold - threshold)
-        return VStack(alignment: .leading, spacing: 6) {
-            HStack {
-                Text("\(vm.wakeStreak) / \(current == .legendary ? vm.wakeStreak : nextThreshold) days")
-                    .font(.system(size: 10, weight: .bold, design: .rounded))
-                    .foregroundStyle(AppTheme.textMedium)
-                Spacer()
-                Text(current == .legendary ? "Top level" : "Next: \(SunLevel(rawValue: current.rawValue + 1)?.title ?? "")")
-                    .font(.system(size: 10, weight: .medium, design: .rounded))
-                    .foregroundStyle(AppTheme.textLight)
-            }
-            GeometryReader { geo in
-                ZStack(alignment: .leading) {
-                    RoundedRectangle(cornerRadius: 3, style: .continuous)
-                        .fill(AppTheme.creamWarm)
-                    RoundedRectangle(cornerRadius: 3, style: .continuous)
-                        .fill(AppTheme.sunAmber)
-                        .frame(width: geo.size.width * max(0, min(progress, 1)))
+                    .stroke(.white.opacity(1.0 - Double(i) * 0.25), style: StrokeStyle(lineWidth: 4, lineCap: .round))
+                    .frame(width: size * 0.10, height: size * 0.30)
                 }
             }
-            .frame(height: 6)
-        }
-    }
-
-    private func infoCard(icon: String, title: String, value: String, accent: Color) -> some View {
-        SunCard {
-            HStack(spacing: 12) {
-                Image(systemName: icon)
-                    .foregroundStyle(.white)
-                    .font(.system(size: 18, weight: .bold))
-                    .frame(width: 34, height: 34)
-                    .background(accent)
-                    .clipShape(Circle())
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(title)
-                        .font(.system(size: 22, weight: .black, design: .rounded))
-                        .foregroundStyle(AppTheme.textDark)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.65)
-                    Text(value)
-                        .font(.system(.caption, design: .rounded, weight: .semibold))
-                        .foregroundStyle(AppTheme.textMedium)
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-        }
-    }
-
-    private func compactLevelRow(_ level: SunLevel) -> some View {
-        let unlocked = vm.wakeStreak >= level.streakThreshold
-        return HStack(spacing: 10) {
-            Image(systemName: unlocked ? "sun.max.fill" : "lock.fill")
-                .font(.system(size: 12, weight: .bold))
-                .foregroundStyle(unlocked ? .white : AppTheme.textLight)
-                .frame(width: 26, height: 26)
-                .background(unlocked ? AppTheme.sunAmber : Color.gray.opacity(0.12))
-                .clipShape(Circle())
-            VStack(alignment: .leading, spacing: 1) {
-                HStack(spacing: 6) {
-                    Text(level.title)
-                        .font(.system(.subheadline, design: .rounded, weight: .bold))
-                        .foregroundStyle(unlocked ? AppTheme.textDark : AppTheme.textLight)
-                    if vm.sunLevel == level {
-                        Text("NOW")
-                            .font(.system(size: 8, weight: .black, design: .rounded))
-                            .foregroundStyle(.white)
-                            .padding(.horizontal, 5)
-                            .padding(.vertical, 2)
-                            .background(AppTheme.sunAmber)
-                            .clipShape(Capsule())
-                    }
-                }
-                Text("\(level.streakThreshold)+ days")
-                    .font(.system(.caption2, design: .rounded, weight: .medium))
-                    .foregroundStyle(AppTheme.textLight)
-            }
-            Spacer()
         }
     }
 }
 
-// MARK: - Alarm Tab
+private struct CreatePromptStep: View {
+    var onNext: () -> Void
+    @State private var pulse: CGFloat = 1.0
 
-private struct AlarmTab: View {
+    var body: some View {
+        VStack(spacing: 0) {
+            Spacer()
+            ZStack {
+                Circle()
+                    .fill(
+                        RadialGradient(
+                            colors: [
+                                Color(red: 1.0, green: 0.882, blue: 0.588).opacity(0.9),
+                                Color(red: 1.0, green: 0.706, blue: 0.353).opacity(0.4),
+                                .clear
+                            ],
+                            center: UnitPoint(x: 0.5, y: 0.45),
+                            startRadius: 0, endRadius: 100
+                        )
+                    )
+                    .frame(width: 200, height: 200)
+
+                Circle()
+                    .fill(AppTheme.chipGradient)
+                    .frame(width: 96, height: 96)
+                    .shadow(color: Color(red: 0.86, green: 0.43, blue: 0.12).opacity(0.40), radius: 14, x: 0, y: 12)
+                    .overlay(
+                        Image(systemName: "plus")
+                            .font(.system(size: 42, weight: .bold))
+                            .foregroundStyle(.white)
+                    )
+                    .scaleEffect(pulse)
+                    .onAppear {
+                        withAnimation(.easeInOut(duration: 2.4).repeatForever(autoreverses: true)) {
+                            pulse = 1.06
+                        }
+                    }
+            }
+            .padding(.bottom, 36)
+
+            Text("Create your\nfirst alarm.")
+                .font(.system(size: 32, weight: .bold))
+                .multilineTextAlignment(.center)
+                .foregroundStyle(AppTheme.textDark)
+                .lineSpacing(2)
+
+            Spacer()
+
+            VStack(spacing: 18) {
+                Button("Let's go", action: onNext)
+                    .buttonStyle(PillButtonStyle())
+                OnboardingDots(count: 4, active: 2)
+            }
+            .padding(.horizontal, 28)
+            .padding(.bottom, 56)
+        }
+    }
+}
+
+// MARK: - Main tabs (custom floating tab bar)
+
+private enum MainTab { case list, create, profile }
+
+private struct MainTabsView: View {
     @EnvironmentObject private var vm: AlarmAppViewModel
+    @State private var tab: MainTab = .list
     @State private var editingAlarm: AlarmItem?
 
     var body: some View {
-        NavigationStack {
-            ZStack {
-                AppTheme.homeGradient(hour: AppTheme.currentHour).ignoresSafeArea()
+        ZStack {
+            SunriseBackground()
 
-                Group {
-                    if vm.alarms.isEmpty {
-                        emptyState
-                    } else {
-                        List {
-                            ForEach(vm.alarms) { alarm in
-                                AlarmRow(alarm: alarm) {
-                                    editingAlarm = alarm
-                                } onToggle: {
-                                    vm.toggleAlarm(alarm)
-                                }
-                                .listRowBackground(Color.clear)
-                                .listRowSeparator(.hidden)
-                                .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
-                                .swipeActions(edge: .trailing) {
+            Group {
+                switch tab {
+                case .list:
+                    AlarmListScreen(onAdd: { tab = .create }, onEdit: { editingAlarm = $0 })
+                case .create:
+                    CreateAlarmFlow(
+                        initialAlarm: AlarmItem(),
+                        isOnboarding: false,
+                        onCancel: { tab = .list },
+                        onSave: { alarm in
+                            vm.alarms.insert(alarm, at: 0)
+                            vm.alarmManager.scheduleAlarm(alarm, activeAlarmsCount: max(1, vm.alarms.filter(\.isEnabled).count))
+                            tab = .list
+                        }
+                    )
+                case .profile:
+                    ProfileScreen()
+                }
+            }
+
+            VStack {
+                Spacer()
+                FloatingTabBar(active: tab) { tab = $0 }
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 28)
+            }
+        }
+        .sheet(item: $editingAlarm) { alarm in
+            CreateAlarmFlow(
+                initialAlarm: alarm,
+                isOnboarding: false,
+                onCancel: { editingAlarm = nil },
+                onSave: { updated in
+                    vm.updateAlarm(updated)
+                    editingAlarm = nil
+                }
+            )
+        }
+    }
+}
+
+private struct FloatingTabBar: View {
+    let active: MainTab
+    let onChange: (MainTab) -> Void
+
+    var body: some View {
+        HStack(spacing: 6) {
+            tabButton(.list, label: "Alarms", icon: "alarm")
+            createButton
+            tabButton(.profile, label: "You", icon: "sun.max")
+        }
+        .padding(6)
+        .frame(height: 72)
+        .background(
+            Capsule()
+                .fill(.ultraThinMaterial)
+                .overlay(Capsule().fill(.white.opacity(0.45)))
+                .overlay(Capsule().strokeBorder(.white.opacity(0.8), lineWidth: 1))
+        )
+        .shadow(color: Color(red: 0.55, green: 0.35, blue: 0.16).opacity(0.18), radius: 18, x: 0, y: 10)
+    }
+
+    private func tabButton(_ which: MainTab, label: String, icon: String) -> some View {
+        let isActive = active == which
+        return Button { onChange(which) } label: {
+            VStack(spacing: 3) {
+                Image(systemName: icon)
+                    .font(.system(size: 22, weight: .semibold))
+                Text(label)
+                    .font(.system(size: 10.5, weight: .semibold))
+            }
+            .foregroundStyle(isActive ? AppTheme.accent : AppTheme.textMedium)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(
+                Capsule()
+                    .fill(isActive ? .white.opacity(0.85) : .clear)
+            )
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var createButton: some View {
+        Button { onChange(.create) } label: {
+            Image(systemName: "plus")
+                .font(.system(size: 26, weight: .bold))
+                .foregroundStyle(.white)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(Capsule().fill(AppTheme.chipGradient))
+                .shadow(color: Color(red: 0.86, green: 0.43, blue: 0.12).opacity(0.30), radius: 8, x: 0, y: 4)
+        }
+        .buttonStyle(.plain)
+        .frame(maxWidth: .infinity)
+    }
+}
+
+// MARK: - Alarm list
+
+private struct AlarmListScreen: View {
+    @EnvironmentObject private var vm: AlarmAppViewModel
+    var onAdd: () -> Void
+    var onEdit: (AlarmItem) -> Void
+
+    private var nextAlarm: AlarmItem? {
+        vm.alarms.first(where: \.isEnabled)
+    }
+
+    var body: some View {
+        ScrollView {
+            VStack(spacing: 16) {
+                HStack {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(eyebrowText())
+                            .font(.system(size: 13, weight: .semibold))
+                            .tracking(1.6)
+                            .textCase(.uppercase)
+                            .foregroundStyle(AppTheme.textMedium)
+                        Text(headlineText())
+                            .font(.system(size: 38, weight: .bold))
+                            .foregroundStyle(AppTheme.textDark)
+                    }
+                    Spacer()
+                }
+                .padding(.horizontal, 6)
+                .padding(.top, 60)
+                .padding(.bottom, 6)
+
+                if let next = nextAlarm {
+                    nextAlarmCard(next)
+                }
+
+                if vm.alarms.isEmpty {
+                    FrostCard(corner: 24) {
+                        Text("No alarms yet. Tap **+** to set one.")
+                            .font(.system(size: 15))
+                            .foregroundStyle(AppTheme.textMedium)
+                            .padding(36)
+                            .frame(maxWidth: .infinity)
+                    }
+                    .padding(.horizontal, 6)
+                } else {
+                    VStack(spacing: 12) {
+                        ForEach(vm.alarms) { alarm in
+                            AlarmRow(alarm: alarm,
+                                     onTap: { onEdit(alarm) },
+                                     onToggle: { vm.toggleAlarm(alarm) })
+                                .contextMenu {
                                     Button(role: .destructive) {
                                         vm.deleteAlarm(alarm)
                                     } label: {
                                         Label("Delete", systemImage: "trash")
                                     }
                                 }
-                            }
-
-                            // NFC sticker section at bottom of list
-                            nfcSection
-                                .listRowBackground(Color.clear)
-                                .listRowSeparator(.hidden)
-                                .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
                         }
-                        .listStyle(.plain)
-                        .scrollContentBackground(.hidden)
-                        .safeAreaPadding(.bottom, 96)
                     }
                 }
+
+                Color.clear.frame(height: 110)
             }
-            .navigationTitle("Alarm")
-            .navigationBarTitleDisplayMode(.large)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        vm.addAlarm()
-                        // Open the new alarm for editing right away
-                        if let newest = vm.alarms.last { editingAlarm = newest }
-                    } label: {
-                        Image(systemName: "plus")
-                            .fontWeight(.semibold)
-                    }
-                    .tint(AppTheme.sunAmber)
-                }
-            }
-            .sheet(item: $editingAlarm) { alarm in
-                AlarmEditSheet(alarm: alarm) { updated in
-                    vm.updateAlarm(updated)
-                    editingAlarm = nil
-                }
-            }
+            .padding(.horizontal, 20)
         }
     }
 
-    private var emptyState: some View {
-        VStack(spacing: 16) {
-            Image(systemName: "alarm")
-                .font(.system(size: 48))
-                .foregroundStyle(AppTheme.sunAmber)
-            Text("No alarms yet")
-                .font(.system(.title3, design: .rounded, weight: .bold))
-                .foregroundStyle(AppTheme.textDark)
-            Text("Tap + to add your first alarm.")
-                .font(.system(.subheadline, design: .rounded))
-                .foregroundStyle(AppTheme.textMedium)
-        }
-        .padding(24)
-        .background(AppTheme.bgCard.opacity(0.78))
-        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .padding(.horizontal, 24)
+    private func eyebrowText() -> String {
+        let cal = Calendar.current
+        let tomorrow = cal.date(byAdding: .day, value: 1, to: .now) ?? .now
+        return "Tomorrow · " + tomorrow.formatted(.dateTime.weekday(.abbreviated))
     }
 
-    private var nfcSection: some View {
-        SunCard {
-            VStack(alignment: .leading, spacing: 12) {
-                Label("Sunny's Spot", systemImage: "wave.3.right")
-                    .font(.system(.caption, design: .rounded, weight: .semibold))
-                    .foregroundStyle(AppTheme.textMedium)
-                if let id = vm.registeredStickerID {
-                    HStack(spacing: 10) {
-                        Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Sunny's spot saved")
-                                .font(.system(.subheadline, design: .rounded, weight: .semibold))
-                            Text(id)
-                                .font(.system(.caption2, design: .monospaced))
-                                .foregroundStyle(AppTheme.textLight)
-                                .lineLimit(1)
-                        }
-                    }
-                } else {
-                    Text("Sunny's spot isn't set up yet.")
-                        .font(.system(.subheadline, design: .rounded))
-                        .foregroundStyle(AppTheme.textLight)
-                }
-                Button(vm.isNFCScanning ? "Scanning…" : (vm.registeredStickerID == nil ? "Set Up Sunny's Spot" : "Move Sunny's Spot")) {
-                    vm.startNFCRegistration { }
-                }
-                .buttonStyle(SecondaryButtonStyle())
-                .disabled(vm.isNFCScanning)
+    private func headlineText() -> String {
+        let h = AppTheme.currentHour
+        return (h < 6 || h >= 21) ? "Good night." : AppTheme.greeting(hour: h) + "."
+    }
 
-                if let err = vm.nfcError {
-                    Text(err).font(.system(.caption, design: .rounded)).foregroundStyle(.red)
-                }
+    private func nextAlarmCard(_ alarm: AlarmItem) -> some View {
+        let nextDate = nextFire(for: alarm)
+        let countdown = countdownText(to: nextDate)
+        return HStack(spacing: 16) {
+            ZStack {
+                Circle().fill(.white.opacity(0.55)).frame(width: 44, height: 44)
+                Image(systemName: "alarm")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(AppTheme.textDark)
             }
+            VStack(alignment: .leading, spacing: 2) {
+                Text("NEXT ALARM · \(countdown)")
+                    .font(.system(size: 12, weight: .semibold))
+                    .tracking(0.4)
+                    .foregroundStyle(AppTheme.textDark.opacity(0.7))
+                let label = alarm.label.isEmpty ? "Alarm" : alarm.label
+                Text("\(alarm.timeText) · \(label)")
+                    .font(.system(size: 22, weight: .bold))
+                    .foregroundStyle(AppTheme.textDark)
+            }
+            Spacer()
         }
+        .padding(.horizontal, 22).padding(.vertical, 18)
+        .background(
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .fill(LinearGradient(
+                    colors: [Color(red: 1, green: 0.824, blue: 0.549).opacity(0.85),
+                             Color(red: 1, green: 0.667, blue: 0.353).opacity(0.7)],
+                    startPoint: .topLeading, endPoint: .bottomTrailing))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .strokeBorder(.white.opacity(0.6), lineWidth: 1)
+        )
+        .shadow(color: Color(red: 0.86, green: 0.47, blue: 0.16).opacity(0.20), radius: 14, x: 0, y: 8)
+    }
+
+    private func nextFire(for alarm: AlarmItem) -> Date {
+        let cal = Calendar.current
+        let now = Date()
+        let timeComps = cal.dateComponents([.hour, .minute], from: alarm.date)
+        var dc = cal.dateComponents([.year, .month, .day], from: now)
+        dc.hour = timeComps.hour; dc.minute = timeComps.minute; dc.second = 0
+        let today = cal.date(from: dc) ?? now
+        return today > now ? today : (cal.date(byAdding: .day, value: 1, to: today) ?? today)
+    }
+
+    private func countdownText(to date: Date) -> String {
+        let interval = max(0, date.timeIntervalSinceNow)
+        let h = Int(interval) / 3600
+        let m = (Int(interval) % 3600) / 60
+        if h == 0 { return "IN \(m)M" }
+        return "IN \(h)H \(m)M"
     }
 }
-
-// MARK: - Alarm Row
 
 private struct AlarmRow: View {
     let alarm: AlarmItem
@@ -570,338 +475,598 @@ private struct AlarmRow: View {
     let onToggle: () -> Void
 
     var body: some View {
-        SunCard {
+        FrostCard(corner: 22) {
             HStack(spacing: 14) {
                 Button(action: onTap) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(alarm.timeText)
-                            .font(.system(size: 30, weight: .black, design: .rounded))
-                            .foregroundStyle(alarm.isEnabled ? AppTheme.textDark : AppTheme.textLight)
-                        Text(alarm.daysText)
-                            .font(.system(.caption, design: .rounded, weight: .semibold))
-                            .foregroundStyle(AppTheme.textMedium)
-                        HStack(spacing: 8) {
-                            Label(alarm.ringtoneName, systemImage: "music.note")
-                            Label("\(Int(alarm.volume * 100))%", systemImage: "speaker.wave.2.fill")
+                    HStack(spacing: 0) {
+                        VStack(alignment: .leading, spacing: 6) {
+                            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                                Text(timePrimary)
+                                    .font(.system(size: 36, weight: .light))
+                                    .tracking(-1.0)
+                                    .foregroundStyle(AppTheme.textDark)
+                                Text(timeAmPm)
+                                    .font(.system(size: 16, weight: .medium))
+                                    .foregroundStyle(AppTheme.textMedium)
+                            }
+                            HStack(spacing: 8) {
+                                if !alarm.label.isEmpty {
+                                    Text(alarm.label)
+                                        .font(.system(size: 14))
+                                        .foregroundStyle(AppTheme.textMedium)
+                                    Text("·").foregroundStyle(AppTheme.textLight)
+                                }
+                                HStack(spacing: 3) {
+                                    ForEach(weekdayLetters.indices, id: \.self) { i in
+                                        Text(weekdayLetters[i])
+                                            .font(.system(size: 11, weight: .semibold))
+                                            .frame(width: 16)
+                                            .foregroundStyle(weekdayActive[i] ? AppTheme.accent : AppTheme.textDark.opacity(0.25))
+                                    }
+                                }
+                            }
                         }
-                        .font(.system(size: 10, weight: .bold, design: .rounded))
-                        .foregroundStyle(AppTheme.textLight)
+                        Spacer()
                     }
+                    .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                Spacer()
-                Toggle("", isOn: Binding(get: { alarm.isEnabled }, set: { _ in onToggle() }))
-                    .tint(AppTheme.sunAmber)
-                    .labelsHidden()
+                .opacity(alarm.isEnabled ? 1 : 0.55)
+
+                SunnyToggle(isOn: Binding(
+                    get: { alarm.isEnabled },
+                    set: { _ in onToggle() }
+                ))
             }
+            .padding(.horizontal, 18).padding(.vertical, 16)
         }
     }
+
+    private var weekdayLetters: [String] { ["M", "T", "W", "T", "F", "S", "S"] }
+    private var weekdayActive: [Bool] {
+        let order: [RepeatDay] = [.mon, .tue, .wed, .thu, .fri, .sat, .sun]
+        return order.map { alarm.repeatDays.contains($0) }
+    }
+
+    private var timeFormatted: (String, String) {
+        let f = DateFormatter()
+        f.dateFormat = "h:mm a"
+        let str = f.string(from: alarm.date)
+        let parts = str.split(separator: " ")
+        return (String(parts[0]), parts.count > 1 ? String(parts[1]) : "")
+    }
+    private var timePrimary: String { timeFormatted.0 }
+    private var timeAmPm: String { timeFormatted.1 }
 }
 
-// MARK: - Alarm Edit Sheet
+// MARK: - Create Alarm flow (3 steps)
 
-private struct AlarmEditSheet: View {
-    @State private var alarm: AlarmItem
-    let onSave: (AlarmItem) -> Void
-    @Environment(\.dismiss) private var dismiss
+private struct CreateAlarmFlow: View {
     @EnvironmentObject private var vm: AlarmAppViewModel
-    @State private var volumeDebounce: DispatchWorkItem?
+    let isOnboarding: Bool
+    let onCancel: () -> Void
+    let onSave: (AlarmItem) -> Void
 
-    init(alarm: AlarmItem, onSave: @escaping (AlarmItem) -> Void) {
-        _alarm = State(initialValue: alarm)
+    @State private var alarm: AlarmItem
+    @State private var step: Int = 1
+    @State private var repeatExpanded = false
+    @State private var soundExpanded = false
+
+    init(initialAlarm: AlarmItem, isOnboarding: Bool, onCancel: @escaping () -> Void, onSave: @escaping (AlarmItem) -> Void) {
+        self._alarm = State(initialValue: initialAlarm)
+        self.isOnboarding = isOnboarding
+        self.onCancel = onCancel
         self.onSave = onSave
     }
 
-    private func previewCurrent() {
-        vm.alarmManager.previewSound(volume: alarm.volume, ringtone: alarm.ringtoneName)
-    }
+    private let weekdayOrder: [RepeatDay] = [.mon, .tue, .wed, .thu, .fri, .sat, .sun]
+    private let weekdayLetters = ["M", "T", "W", "T", "F", "S", "S"]
 
     var body: some View {
-        NavigationStack {
-            ZStack {
-                AppTheme.homeGradient(hour: AppTheme.currentHour).ignoresSafeArea()
-                ScrollView {
-                    VStack(spacing: 12) {
-                        SunCard {
-                            VStack(alignment: .leading, spacing: 6) {
-                                Label("Wake Time", systemImage: "clock.fill")
-                                    .font(.system(.caption, design: .rounded, weight: .semibold))
-                                    .foregroundStyle(AppTheme.textMedium)
-                                DatePicker("", selection: $alarm.date, displayedComponents: .hourAndMinute)
-                                    .datePickerStyle(.wheel)
-                                    .labelsHidden()
-                                    .colorScheme(.light)
-                                    .frame(maxWidth: .infinity)
-                            }
-                        }
-
-                        SunCard {
-                            VStack(alignment: .leading, spacing: 12) {
-                                Label("Repeat", systemImage: "calendar")
-                                    .font(.system(.caption, design: .rounded, weight: .semibold))
-                                    .foregroundStyle(AppTheme.textMedium)
-                                RepeatDayPicker(days: $alarm.repeatDays)
-                            }
-                        }
-
-                        SunCard {
-                            VStack(alignment: .leading, spacing: 10) {
-                                Label("Check-In Rounds", systemImage: "checkmark.shield.fill")
-                                    .font(.system(.caption, design: .rounded, weight: .semibold))
-                                    .foregroundStyle(AppTheme.textMedium)
-                                Stepper(
-                                    "\(alarm.checkInRounds) round\(alarm.checkInRounds == 1 ? "" : "s")",
-                                    value: $alarm.checkInRounds, in: 1...5
-                                )
-                                .font(.system(.subheadline, design: .rounded))
-                                Text("Sunny will check back in \(alarm.checkInIntervalMinutes) min after each tap.")
-                                    .font(.system(.caption, design: .rounded))
-                                    .foregroundStyle(AppTheme.textLight)
-                            }
-                        }
-
-                        SunCard {
-                            VStack(alignment: .leading, spacing: 10) {
-                                Label("Check-In Reminder", systemImage: "bell.badge.fill")
-                                    .font(.system(.caption, design: .rounded, weight: .semibold))
-                                    .foregroundStyle(AppTheme.textMedium)
-                                Stepper(
-                                    "\(alarm.checkInIntervalMinutes) min after each tap",
-                                    value: $alarm.checkInIntervalMinutes,
-                                    in: 1...30
-                                )
-                                .font(.system(.subheadline, design: .rounded))
-                            }
-                        }
-
-                        SunCard {
-                            VStack(alignment: .leading, spacing: 14) {
-                                Label("Volume", systemImage: "speaker.wave.2.fill")
-                                    .font(.system(.caption, design: .rounded, weight: .semibold))
-                                    .foregroundStyle(AppTheme.textMedium)
-                                HStack(spacing: 10) {
-                                    Image(systemName: "speaker.fill")
-                                        .foregroundStyle(AppTheme.textLight)
-                                        .font(.caption)
-                                    Slider(value: $alarm.volume, in: 0...1)
-                                        .tint(AppTheme.sunAmber)
-                                        .onChange(of: alarm.volume) { _, newValue in
-                                            volumeDebounce?.cancel()
-                                            let work = DispatchWorkItem { previewCurrent() }
-                                            volumeDebounce = work
-                                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4, execute: work)
-                                        }
-                                    Image(systemName: "speaker.wave.3.fill")
-                                        .foregroundStyle(AppTheme.textLight)
-                                        .font(.caption)
-                                    Text("\(Int(alarm.volume * 100))")
-                                        .font(.system(.caption, design: .rounded, weight: .bold))
-                                        .foregroundStyle(AppTheme.textLight)
-                                        .frame(width: 28, alignment: .trailing)
-                                }
-                            }
-                        }
-
-                        SunCard {
-                            VStack(alignment: .leading, spacing: 12) {
-                                Label("Ringtone", systemImage: "music.note")
-                                    .font(.system(.caption, design: .rounded, weight: .semibold))
-                                    .foregroundStyle(AppTheme.textMedium)
-                                ForEach(AlarmManager.ringtoneNames, id: \.self) { name in
-                                    Button {
-                                        alarm.ringtoneName = name
-                                        previewCurrent()
-                                    } label: {
-                                        HStack {
-                                            Image(systemName: alarm.ringtoneName == name ? "largecircle.fill.circle" : "circle")
-                                                .foregroundStyle(alarm.ringtoneName == name ? AppTheme.sunAmber : AppTheme.textLight.opacity(0.5))
-                                            Text(name)
-                                                .font(.system(.subheadline, design: .rounded))
-                                                .foregroundStyle(AppTheme.textDark)
-                                            Spacer()
-                                            Image(systemName: "play.fill")
-                                                .font(.caption)
-                                                .foregroundStyle(AppTheme.textLight)
-                                        }
-                                        .contentShape(Rectangle())
-                                    }
-                                    .buttonStyle(.plain)
-                                    if name != AlarmManager.ringtoneNames.last {
-                                        Divider()
-                                    }
-                                }
-                            }
-                        }
-
-                        Button("Save") {
-                            onSave(alarm)
-                        }
-                        .buttonStyle(PrimaryButtonStyle(color: AppTheme.textDark))
-                        .padding(.bottom, 20)
-                    }
-                    .padding(.horizontal, 20)
-                    .padding(.top, 8)
-                    .padding(.bottom, 18)
-                }
-            }
-            .navigationTitle("Edit Alarm")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button("Cancel") { dismiss() }
-                        .tint(AppTheme.sunAmber)
-                }
+        ZStack {
+            SunriseBackground()
+            switch step {
+            case 1: detailsStep
+            case 2: checkInStep
+            default: nfcPlacementStep
             }
         }
+        .animation(.easeInOut(duration: 0.25), value: step)
+    }
+
+    // MARK: Step 1 — details
+
+    private var detailsStep: some View {
+        ScrollView {
+            VStack(spacing: 20) {
+                HStack {
+                    Button("Cancel", action: onCancel)
+                        .font(.system(size: 17))
+                        .foregroundStyle(AppTheme.accent)
+                    Spacer()
+                    Text("Add Alarm")
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundStyle(AppTheme.textDark)
+                    Spacer()
+                    Button("Save") { step = 2 }
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundStyle(AppTheme.accent)
+                }
+                .padding(.top, 60)
+
+                DatePicker("", selection: $alarm.date, displayedComponents: .hourAndMinute)
+                    .datePickerStyle(.wheel)
+                    .labelsHidden()
+                    .frame(height: 200)
+
+                VStack(spacing: 0) {
+                    repeatRow
+                    Divider().background(AppTheme.textDark.opacity(0.10)).padding(.leading, 18)
+                    labelRow
+                    Divider().background(AppTheme.textDark.opacity(0.10)).padding(.leading, 18)
+                    soundRow
+                }
+                .background(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .fill(.ultraThinMaterial)
+                        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(.white.opacity(0.45)))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .strokeBorder(.white.opacity(0.65), lineWidth: 1)
+                )
+                .shadow(color: Color(red: 0.55, green: 0.35, blue: 0.16).opacity(0.08), radius: 12, x: 0, y: 6)
+
+                Spacer(minLength: 80)
+            }
+            .padding(.horizontal, 20)
+        }
+    }
+
+    private var repeatRow: some View {
+        VStack(spacing: 0) {
+            Button {
+                withAnimation(.easeInOut(duration: 0.2)) { repeatExpanded.toggle() }
+            } label: {
+                HStack {
+                    Text("Repeat").font(.system(size: 16, weight: .medium)).foregroundStyle(AppTheme.textDark)
+                    Spacer()
+                    Text(repeatSummary).font(.system(size: 16)).foregroundStyle(AppTheme.textMedium)
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(AppTheme.textMedium)
+                        .rotationEffect(.degrees(repeatExpanded ? 90 : 0))
+                }
+                .padding(.horizontal, 18).padding(.vertical, 14)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+
+            if repeatExpanded {
+                HStack(spacing: 6) {
+                    ForEach(weekdayOrder.indices, id: \.self) { i in
+                        let day = weekdayOrder[i]
+                        let on = alarm.repeatDays.contains(day)
+                        Button {
+                            if on { alarm.repeatDays.remove(day) } else { alarm.repeatDays.insert(day) }
+                        } label: {
+                            Text(weekdayLetters[i])
+                                .font(.system(size: 13, weight: .semibold))
+                                .frame(maxWidth: .infinity, minHeight: 34)
+                                .foregroundStyle(on ? .white : AppTheme.textDark)
+                                .background(
+                                    Capsule().fill(on ? AnyShapeStyle(AppTheme.chipGradient) : AnyShapeStyle(.white.opacity(0.6)))
+                                )
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.horizontal, 18).padding(.bottom, 14)
+            }
+        }
+    }
+
+    private var labelRow: some View {
+        HStack {
+            Text("Label").font(.system(size: 16, weight: .medium)).foregroundStyle(AppTheme.textDark)
+            Spacer()
+            TextField("Sunrise", text: $alarm.label)
+                .multilineTextAlignment(.trailing)
+                .font(.system(size: 16))
+                .foregroundStyle(AppTheme.textDark)
+                .frame(maxWidth: 180)
+        }
+        .padding(.horizontal, 18).padding(.vertical, 14)
+    }
+
+    private var soundRow: some View {
+        VStack(spacing: 0) {
+            Button {
+                withAnimation(.easeInOut(duration: 0.2)) { soundExpanded.toggle() }
+            } label: {
+                HStack {
+                    Text("Sound").font(.system(size: 16, weight: .medium)).foregroundStyle(AppTheme.textDark)
+                    Spacer()
+                    Text(alarm.ringtoneName).font(.system(size: 16)).foregroundStyle(AppTheme.textMedium)
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(AppTheme.textMedium)
+                        .rotationEffect(.degrees(soundExpanded ? 90 : 0))
+                }
+                .padding(.horizontal, 18).padding(.vertical, 14)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+
+            if soundExpanded {
+                FlowingChips(items: AlarmManager.ringtoneNames, selected: alarm.ringtoneName) { name in
+                    alarm.ringtoneName = name
+                    vm.alarmManager.previewSound(volume: alarm.volume, ringtone: name)
+                }
+                .padding(.horizontal, 18).padding(.bottom, 14)
+            }
+        }
+    }
+
+    private var repeatSummary: String {
+        let days = alarm.repeatDays
+        if days.isEmpty { return "Never" }
+        if days.count == 7 { return "Every day" }
+        if days == [.mon, .tue, .wed, .thu, .fri] { return "Weekdays" }
+        if days == [.sat, .sun] { return "Weekends" }
+        return weekdayOrder.compactMap { days.contains($0) ? $0.rawValue : nil }.joined(separator: ", ")
+    }
+
+    // MARK: Step 2 — check-ins
+
+    private var checkInStep: some View {
+        VStack(spacing: 0) {
+            HStack {
+                Button { step = 1 } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "chevron.left").font(.system(size: 14, weight: .semibold))
+                        Text("Back")
+                    }
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundStyle(AppTheme.textMedium)
+                }
+                Spacer()
+                Text("STEP 2 OF 3")
+                    .font(.system(size: 13, weight: .semibold))
+                    .tracking(1.2)
+                    .foregroundStyle(AppTheme.textMedium)
+                Spacer()
+                Color.clear.frame(width: 60)
+            }
+            .padding(.top, 60).padding(.horizontal, 24)
+
+            SunMascotView(level: .seedling, mood: .happy, size: 96)
+                .padding(.top, 30)
+
+            Text("Want wake-up\ncheck-ins?")
+                .font(.system(size: 26, weight: .bold))
+                .multilineTextAlignment(.center)
+                .foregroundStyle(AppTheme.textDark)
+                .padding(.top, 18)
+                .lineSpacing(2)
+
+            Text("The alarm can ring a few more times after you dismiss — to make sure you're really up.")
+                .font(.system(size: 14.5))
+                .multilineTextAlignment(.center)
+                .foregroundStyle(AppTheme.textMedium)
+                .padding(.top, 10)
+                .padding(.horizontal, 36)
+
+            FrostCard(corner: 22) {
+                VStack(spacing: 0) {
+                    StepperRow(
+                        label: "Number of check-ins",
+                        value: alarm.checkInRounds,
+                        suffix: alarm.checkInRounds == 1 ? "check-in" : "check-ins",
+                        range: 1...6,
+                        onChange: { alarm.checkInRounds = $0 }
+                    )
+                    Divider().background(AppTheme.textDark.opacity(0.08)).padding(.vertical, 14)
+                    StepperRow(
+                        label: "Every",
+                        value: alarm.checkInIntervalMinutes,
+                        suffix: "minutes",
+                        range: 1...30,
+                        onChange: { alarm.checkInIntervalMinutes = $0 }
+                    )
+                }
+                .padding(18)
+            }
+            .padding(.top, 18).padding(.horizontal, 24)
+
+            Spacer()
+
+            HStack(spacing: 10) {
+                Button("Skip") { step = 3 }
+                    .buttonStyle(PillButtonStyle(primary: false))
+                Button("Add check-ins") { step = 3 }
+                    .buttonStyle(PillButtonStyle(primary: true))
+            }
+            .padding(.horizontal, 24).padding(.bottom, 56)
+        }
+    }
+
+    // MARK: Step 3 — NFC placement
+
+    private var nfcPlacementStep: some View {
+        VStack(spacing: 0) {
+            HStack {
+                Button { step = 2 } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "chevron.left").font(.system(size: 14, weight: .semibold))
+                        Text("Back")
+                    }
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundStyle(AppTheme.textMedium)
+                }
+                Spacer()
+                Text("STEP 3 OF 3")
+                    .font(.system(size: 13, weight: .semibold))
+                    .tracking(1.2)
+                    .foregroundStyle(AppTheme.textMedium)
+                Spacer()
+                Button("Skip") { onSave(alarm) }
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(AppTheme.accent)
+            }
+            .padding(.top, 60).padding(.horizontal, 24)
+
+            ScrollView {
+                VStack(spacing: 22) {
+                    NFCBadge(size: 130).padding(.top, 24)
+
+                    Text("Place your\nSunny sticker.")
+                        .font(.system(size: 26, weight: .bold))
+                        .multilineTextAlignment(.center)
+                        .foregroundStyle(AppTheme.textDark)
+                        .lineSpacing(2)
+
+                    Text("Stick it across the room — somewhere you have to **get out of bed** to reach.")
+                        .font(.system(size: 15))
+                        .multilineTextAlignment(.center)
+                        .foregroundStyle(AppTheme.textMedium)
+                        .padding(.horizontal, 32)
+
+                    VStack(spacing: 8) {
+                        placementTip(num: 1, title: "Far from your bed", subtitle: "At least a few steps away.")
+                        placementTip(num: 2, title: "Eye level or lower", subtitle: "Easy to tap with your phone.")
+                        placementTip(num: 3, title: "Smooth, flat surface", subtitle: "Avoid metal — it weakens the signal.")
+                    }
+                    .padding(.horizontal, 24)
+                }
+            }
+
+            Button(actionTitle) {
+                if vm.registeredStickerID == nil {
+                    vm.startNFCRegistration { onSave(alarm) }
+                } else {
+                    onSave(alarm)
+                }
+            }
+            .buttonStyle(PillButtonStyle(primary: true))
+            .disabled(vm.isNFCScanning)
+            .padding(.horizontal, 24).padding(.bottom, 56).padding(.top, 12)
+        }
+    }
+
+    private var actionTitle: String {
+        if vm.isNFCScanning { return "Scanning…" }
+        if vm.registeredStickerID == nil { return "Pair sticker" }
+        return "I've placed it"
+    }
+
+    private func placementTip(num: Int, title: String, subtitle: String) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            Circle()
+                .fill(AppTheme.chipGradient)
+                .frame(width: 22, height: 22)
+                .overlay(Text("\(num)").font(.system(size: 12, weight: .bold)).foregroundStyle(.white))
+            VStack(alignment: .leading, spacing: 1) {
+                Text(title).font(.system(size: 14, weight: .semibold)).foregroundStyle(AppTheme.textDark)
+                Text(subtitle).font(.system(size: 12.5)).foregroundStyle(AppTheme.textMedium)
+            }
+            Spacer()
+        }
+        .padding(.horizontal, 14).padding(.vertical, 10)
+        .background(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(.white.opacity(0.5))
+                .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(.white.opacity(0.6), lineWidth: 1))
+        )
     }
 }
 
-// MARK: - Stats Tab
+// MARK: - Profile
 
-private struct StatsTab: View {
+private struct ProfileScreen: View {
     @EnvironmentObject private var vm: AlarmAppViewModel
 
     var body: some View {
-        NavigationStack {
-            ZStack {
-                Color(red: 0.97, green: 0.96, blue: 0.94).ignoresSafeArea()
-                ScrollView {
-                    VStack(spacing: 20) {
-                        // Mascot + level
-                        SunCard {
-                            VStack(spacing: 16) {
-                                SunMascotView(level: vm.sunLevel, mood: vm.sunMood, size: 120)
-                                Text(vm.sunLevel.title)
-                                    .font(.system(size: 22, weight: .black, design: .rounded))
-                                    .foregroundStyle(AppTheme.textDark)
-                                Text(vm.sunLevel.subtitle)
-                                    .font(.system(.subheadline, design: .rounded))
-                                    .foregroundStyle(AppTheme.textMedium)
-                                    .multilineTextAlignment(.center)
+        ScrollView {
+            VStack(spacing: 0) {
+                Spacer().frame(height: 60)
 
-                                // Progress to next level
-                                if vm.sunLevel != .legendary {
-                                    levelProgressBar
-                                }
-                            }
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 8)
-                        }
+                VStack(spacing: 18) {
+                    SunMascotView(level: vm.sunLevel, mood: .happy, size: 170)
 
-                        // Streak card
-                        SunCard {
-                            HStack(spacing: 16) {
-                                Image(systemName: "flame.fill")
-                                    .font(.system(size: 36))
-                                    .foregroundStyle(.orange)
-                                VStack(alignment: .leading, spacing: 4) {
-                                    Text("\(vm.wakeStreak)")
-                                        .font(.system(size: 36, weight: .black, design: .rounded))
-                                        .foregroundStyle(AppTheme.textDark)
-                                    Text("day streak")
-                                        .font(.system(.subheadline, design: .rounded))
-                                        .foregroundStyle(AppTheme.textMedium)
-                                }
-                                Spacer()
-                            }
-                        }
+                    Text("GOOD MORNING.")
+                        .font(.system(size: 13, weight: .semibold))
+                        .tracking(1.6)
+                        .foregroundStyle(AppTheme.textMedium)
 
-                        // All levels timeline
-                        SunCard {
-                            VStack(alignment: .leading, spacing: 16) {
-                                Text("All Levels")
-                                    .font(.system(.headline, design: .rounded, weight: .bold))
-                                    .foregroundStyle(AppTheme.textDark)
-                                ForEach(SunLevel.allCases, id: \.rawValue) { lvl in
-                                    levelRow(lvl)
-                                }
-                            }
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                        }
-                    }
-                    .padding(.horizontal, 20)
-                    .padding(.top, 8)
-                    .padding(.bottom, 24)
+                    Text("\(vm.wakeStreak)-day streak")
+                        .font(.system(size: 36, weight: .bold))
+                        .foregroundStyle(AppTheme.textDark)
                 }
+
+                tierCard.padding(.horizontal, 20).padding(.top, 22)
+
+                growthLadder.padding(.top, 22)
+
+                statsGrid.padding(.horizontal, 20).padding(.top, 22)
+
+                Spacer().frame(height: 110)
             }
-            .navigationTitle("Growth")
-            .navigationBarTitleDisplayMode(.large)
         }
     }
 
-    private var levelProgressBar: some View {
-        let current = vm.sunLevel
-        let threshold = current.streakThreshold
-        let nextThreshold = current.nextThreshold
-        let progress = Double(vm.wakeStreak - threshold) / Double(nextThreshold - threshold)
-        return VStack(alignment: .leading, spacing: 6) {
-            HStack {
-                Text("\(vm.wakeStreak) / \(nextThreshold) days")
-                    .font(.system(.caption, design: .rounded, weight: .semibold))
-                    .foregroundStyle(AppTheme.textMedium)
+    private var tierCard: some View {
+        let level = vm.sunLevel
+        let next = SunLevel(rawValue: level.rawValue + 1)
+        let daysToNext = max(0, (next?.streakThreshold ?? level.streakThreshold) - vm.wakeStreak)
+        let progress: Double = {
+            guard let next else { return 1.0 }
+            let span = Double(next.streakThreshold - level.streakThreshold)
+            guard span > 0 else { return 1.0 }
+            return min(1, max(0, Double(vm.wakeStreak - level.streakThreshold) / span))
+        }()
+
+        return VStack(spacing: 14) {
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("CURRENT STATE")
+                        .font(.system(size: 11, weight: .semibold)).tracking(1.2)
+                        .foregroundStyle(AppTheme.textDark.opacity(0.65))
+                    Text(level.title)
+                        .font(.system(size: 26, weight: .bold))
+                        .foregroundStyle(AppTheme.textDark)
+                }
                 Spacer()
-                Text("Next: \(SunLevel(rawValue: vm.sunLevel.rawValue + 1)?.title ?? "")")
-                    .font(.system(.caption, design: .rounded))
-                    .foregroundStyle(AppTheme.textLight)
+                if let next {
+                    VStack(alignment: .trailing, spacing: 1) {
+                        (Text("Next: ").font(.system(size: 13)).foregroundStyle(AppTheme.textDark.opacity(0.7)) +
+                         Text(next.title).font(.system(size: 13, weight: .bold)).foregroundStyle(AppTheme.textDark))
+                        Text("in \(daysToNext) days")
+                            .font(.system(size: 13))
+                            .foregroundStyle(AppTheme.textDark.opacity(0.7))
+                    }
+                } else {
+                    Text("Max tier!")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(AppTheme.textDark)
+                }
             }
+
             GeometryReader { geo in
                 ZStack(alignment: .leading) {
-                    RoundedRectangle(cornerRadius: 4)
-                        .fill(Color.gray.opacity(0.15))
-                        .frame(height: 8)
-                    RoundedRectangle(cornerRadius: 4)
-                        .fill(AppTheme.sunAmber)
-                        .frame(width: geo.size.width * max(0, min(progress, 1)), height: 8)
-                        .animation(.spring(duration: 0.6), value: progress)
+                    Capsule().fill(.white.opacity(0.45)).frame(height: 8)
+                    Capsule()
+                        .fill(LinearGradient(
+                            colors: [Color(red: 1, green: 0.82, blue: 0.35), AppTheme.accent],
+                            startPoint: .leading, endPoint: .trailing))
+                        .frame(width: max(8, geo.size.width * progress), height: 8)
+                        .shadow(color: Color(red: 1, green: 0.78, blue: 0.31).opacity(0.7), radius: 6, x: 0, y: 0)
                 }
             }
             .frame(height: 8)
         }
+        .padding(.horizontal, 20).padding(.vertical, 18)
+        .background(
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .fill(LinearGradient(
+                    colors: [Color(red: 1, green: 0.824, blue: 0.549).opacity(0.85),
+                             Color(red: 1, green: 0.667, blue: 0.353).opacity(0.7)],
+                    startPoint: .topLeading, endPoint: .bottomTrailing))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .strokeBorder(.white.opacity(0.6), lineWidth: 1)
+        )
+        .shadow(color: Color(red: 0.86, green: 0.47, blue: 0.16).opacity(0.20), radius: 14, x: 0, y: 8)
     }
 
-    private func levelRow(_ lvl: SunLevel) -> some View {
-        let unlocked = vm.wakeStreak >= lvl.streakThreshold
-        let isCurrent = vm.sunLevel == lvl
-        return HStack(spacing: 14) {
-            ZStack {
-                Circle()
-                    .fill(unlocked ? AppTheme.sunAmber : Color.gray.opacity(0.15))
-                    .frame(width: 36, height: 36)
-                if unlocked {
-                    Image(systemName: "sun.max.fill")
-                        .foregroundStyle(.white)
-                        .font(.system(size: 16))
-                } else {
-                    Image(systemName: "lock.fill")
-                        .foregroundStyle(Color.gray.opacity(0.5))
-                        .font(.system(size: 14))
-                }
-            }
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 6) {
-                    Text(lvl.title)
-                        .font(.system(.subheadline, design: .rounded, weight: isCurrent ? .bold : .regular))
-                        .foregroundStyle(unlocked ? AppTheme.textDark : AppTheme.textLight)
-                    if isCurrent {
-                        Text("YOU")
-                            .font(.system(size: 9, weight: .black, design: .rounded))
-                            .foregroundStyle(.white)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(AppTheme.sunAmber)
-                            .clipShape(Capsule())
+    private var growthLadder: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("GROWTH")
+                .font(.system(size: 11, weight: .semibold)).tracking(1.2)
+                .foregroundStyle(AppTheme.textMedium)
+                .padding(.leading, 26)
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(SunLevel.allCases, id: \.rawValue) { tier in
+                        tierCell(tier)
                     }
                 }
-                Text("\(lvl.streakThreshold)+ days")
-                    .font(.system(.caption2, design: .rounded))
-                    .foregroundStyle(AppTheme.textLight)
+                .padding(.horizontal, 20)
             }
-            Spacer()
+        }
+    }
+
+    private func tierCell(_ tier: SunLevel) -> some View {
+        let reached = vm.wakeStreak >= tier.streakThreshold
+        let isCurrent = vm.sunLevel == tier
+        return VStack(spacing: 6) {
+            ZStack {
+                Circle()
+                    .fill(reached
+                        ? AnyShapeStyle(LinearGradient(colors: [Color(red: 1, green: 0.91, blue: 0.63),
+                                                                 Color(red: 1, green: 0.76, blue: 0.28)],
+                                                       startPoint: .top, endPoint: .bottom))
+                        : AnyShapeStyle(Color.black.opacity(0.15)))
+                    .frame(width: 36, height: 36)
+                Image(systemName: reached ? "sun.max.fill" : "lock.fill")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(reached ? .white : AppTheme.textDark.opacity(0.4))
+            }
+            Text(tier.title)
+                .font(.system(size: 12, weight: .bold))
+                .foregroundStyle(AppTheme.textDark)
+                .lineLimit(1).minimumScaleFactor(0.7)
+            Text("\(tier.streakThreshold)+ days")
+                .font(.system(size: 10))
+                .foregroundStyle(AppTheme.textMedium)
+        }
+        .frame(width: 90)
+        .padding(.vertical, 12).padding(.horizontal, 6)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(isCurrent
+                      ? AnyShapeStyle(LinearGradient(colors: [Color(red: 1, green: 0.91, blue: 0.63),
+                                                              Color(red: 1, green: 0.76, blue: 0.28)],
+                                                    startPoint: .topLeading, endPoint: .bottomTrailing))
+                      : AnyShapeStyle(Color.white.opacity(reached ? 0.7 : 0.4)))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .strokeBorder(isCurrent ? AppTheme.accent.opacity(0.6) : .white.opacity(0.7),
+                              lineWidth: isCurrent ? 1.5 : 1)
+        )
+        .opacity(reached ? 1 : 0.65)
+    }
+
+    private var statsGrid: some View {
+        let stats: [(String, String)] = [
+            ("ON TIME", "—"),
+            ("BEST STREAK", "\(vm.wakeStreak) days"),
+            ("AVG. WAKE", "—"),
+            ("SUNNY TAPS", "\(vm.wakeStreak)")
+        ]
+        return LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
+            ForEach(stats, id: \.0) { stat in
+                FrostCard(corner: 18) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(stat.0)
+                            .font(.system(size: 11, weight: .semibold)).tracking(1.0)
+                            .foregroundStyle(AppTheme.textMedium)
+                        Text(stat.1)
+                            .font(.system(size: 24, weight: .bold))
+                            .foregroundStyle(AppTheme.textDark)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 16).padding(.vertical, 14)
+                }
+            }
         }
     }
 }
 
-// MARK: - Alarm Ringing Screen
+// MARK: - Alarm ringing / Check-in / Level up screens (restyled)
 
 private struct AlarmRingingScreen: View {
     @EnvironmentObject private var vm: AlarmAppViewModel
@@ -913,10 +1078,8 @@ private struct AlarmRingingScreen: View {
 
             VStack(spacing: 0) {
                 Spacer()
-
-                // Time
                 Text(Date.now.formatted(date: .omitted, time: .shortened))
-                    .font(.system(size: 64, weight: .black, design: .rounded))
+                    .font(.system(size: 64, weight: .bold))
                     .foregroundStyle(.white)
                     .scaleEffect(pulseScale)
                     .onAppear {
@@ -924,22 +1087,19 @@ private struct AlarmRingingScreen: View {
                             pulseScale = 1.06
                         }
                     }
-
                 Text("Time to wake up!")
-                    .font(.system(.title2, design: .rounded, weight: .semibold))
+                    .font(.system(size: 22, weight: .semibold))
                     .foregroundStyle(.white.opacity(0.85))
                     .padding(.top, 6)
 
                 Spacer()
 
-                SunMascotView(level: vm.sunLevel, mood: .excited, size: 160)
-                    .padding(.bottom, 8)
+                SunMascotView(level: vm.sunLevel, mood: .happy, size: 160)
 
-                Text("Get up and find Sunny to stop this!")
-                    .font(.system(.subheadline, design: .rounded, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.80))
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal, 32)
+                Text("Get up and find Sunny.")
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.85))
+                    .padding(.top, 12)
 
                 Spacer()
 
@@ -948,32 +1108,24 @@ private struct AlarmRingingScreen: View {
                         vm.startNFCScanForDismissal()
                     } label: {
                         HStack(spacing: 10) {
-                            Image(systemName: "wave.3.right.circle.fill")
-                                .font(.title3)
+                            Image(systemName: "wave.3.right.circle.fill").font(.system(size: 22))
                             Text(vm.isNFCScanning ? "Scanning…" : "Find Sunny")
                         }
                     }
-                    .buttonStyle(PrimaryButtonStyle(color: .white.opacity(0.22)))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 18)
-                            .stroke(.white.opacity(0.5), lineWidth: 1.5)
-                    )
+                    .buttonStyle(PillButtonStyle(primary: false))
                     .disabled(vm.isNFCScanning)
 
                     if let err = vm.nfcError {
                         Text(err)
-                            .font(.system(.caption, design: .rounded))
-                            .foregroundStyle(.white.opacity(0.9))
+                            .font(.system(size: 13))
+                            .foregroundStyle(.white)
                     }
                 }
-                .padding(.horizontal, 28)
-                .padding(.bottom, 52)
+                .padding(.horizontal, 28).padding(.bottom, 52)
             }
         }
     }
 }
-
-// MARK: - Check-In Screen
 
 private struct CheckInScreen: View {
     @EnvironmentObject private var vm: AlarmAppViewModel
@@ -984,19 +1136,18 @@ private struct CheckInScreen: View {
             VStack(spacing: 0) {
                 Spacer()
                 SunMascotView(level: vm.sunLevel, mood: .happy, size: 150)
-                    .padding(.bottom, 24)
-
                 Text(vm.currentCheckInRound == 0 ? "Good tap!" : "Still standing?")
-                    .font(.system(size: 30, weight: .black, design: .rounded))
+                    .font(.system(size: 30, weight: .bold))
                     .foregroundStyle(AppTheme.textDark)
+                    .padding(.top, 24)
 
                 Text("Check-in \(vm.currentCheckInRound + 1) of \(vm.checkInRounds)")
-                    .font(.system(.subheadline, design: .rounded, weight: .semibold))
+                    .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(AppTheme.textMedium)
                     .padding(.top, 6)
 
                 Text("Confirm you're actually up and moving.")
-                    .font(.system(.body, design: .rounded))
+                    .font(.system(size: 16))
                     .foregroundStyle(AppTheme.textMedium)
                     .padding(.top, 14)
                     .padding(.horizontal, 32)
@@ -1004,20 +1155,13 @@ private struct CheckInScreen: View {
 
                 Spacer()
 
-                VStack(spacing: 12) {
-                    Button("Yes, I'm up!") {
-                        vm.confirmAwake()
-                    }
-                    .buttonStyle(PrimaryButtonStyle(color: AppTheme.textDark))
-                }
-                .padding(.horizontal, 28)
-                .padding(.bottom, 52)
+                Button("Yes, I'm up!") { vm.confirmAwake() }
+                    .buttonStyle(PillButtonStyle(primary: true))
+                    .padding(.horizontal, 28).padding(.bottom, 52)
             }
         }
     }
 }
-
-// MARK: - Level Up Screen
 
 private struct LevelUpScreen: View {
     @EnvironmentObject private var vm: AlarmAppViewModel
@@ -1025,29 +1169,28 @@ private struct LevelUpScreen: View {
 
     var body: some View {
         ZStack {
-            AppTheme.homeGradient(hour: AppTheme.currentHour).ignoresSafeArea()
+            SunriseBackground()
             VStack(spacing: 0) {
                 Spacer()
                 Text("Level Up!")
-                    .font(.system(size: 40, weight: .black, design: .rounded))
+                    .font(.system(size: 40, weight: .bold))
                     .foregroundStyle(AppTheme.textDark)
                     .scaleEffect(appeared ? 1 : 0.5)
                     .opacity(appeared ? 1 : 0)
-                    .padding(.bottom, 4)
 
                 Text(vm.sunLevel.title)
-                    .font(.system(.title2, design: .rounded, weight: .bold))
-                    .foregroundStyle(AppTheme.sunAmber)
+                    .font(.system(size: 22, weight: .bold))
+                    .foregroundStyle(AppTheme.accent)
                     .opacity(appeared ? 1 : 0)
                     .padding(.bottom, 30)
 
-                SunMascotView(level: vm.sunLevel, mood: .celebrating, size: 180)
+                SunMascotView(level: vm.sunLevel, mood: .happy, size: 180)
                     .scaleEffect(appeared ? 1 : 0.6)
                     .opacity(appeared ? 1 : 0)
                     .padding(.bottom, 20)
 
                 Text(vm.sunLevel.subtitle)
-                    .font(.system(.body, design: .rounded))
+                    .font(.system(size: 16))
                     .foregroundStyle(AppTheme.textMedium)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 32)
@@ -1056,40 +1199,111 @@ private struct LevelUpScreen: View {
                 Spacer()
 
                 Button("Keep going!") { vm.dismissLevelUp() }
-                    .buttonStyle(PrimaryButtonStyle(color: AppTheme.textDark))
-                    .padding(.horizontal, 28)
-                    .padding(.bottom, 52)
+                    .buttonStyle(PillButtonStyle(primary: true))
+                    .padding(.horizontal, 28).padding(.bottom, 52)
                     .opacity(appeared ? 1 : 0)
             }
         }
         .onAppear {
-            withAnimation(.spring(duration: 0.6, bounce: 0.35)) {
-                appeared = true
-            }
+            withAnimation(.spring(duration: 0.6, bounce: 0.35)) { appeared = true }
         }
     }
 }
 
-// MARK: - Repeat Day Picker (shared)
+// MARK: - Helpers
 
-struct RepeatDayPicker: View {
-    @Binding var days: Set<RepeatDay>
+private struct StepperRow: View {
+    let label: String
+    let value: Int
+    let suffix: String
+    let range: ClosedRange<Int>
+    let onChange: (Int) -> Void
 
     var body: some View {
-        HStack(spacing: 6) {
-            ForEach(RepeatDay.allCases) { day in
-                let on = days.contains(day)
-                Button(day.rawValue) {
-                    if on { days.remove(day) } else { days.insert(day) }
+        HStack {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(label.uppercased())
+                    .font(.system(size: 11, weight: .semibold)).tracking(1.0)
+                    .foregroundStyle(AppTheme.textMedium)
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Text("\(value)")
+                        .font(.system(size: 22, weight: .semibold))
+                        .foregroundStyle(AppTheme.textDark)
+                    Text(suffix)
+                        .font(.system(size: 13))
+                        .foregroundStyle(AppTheme.textMedium)
                 }
-                .font(.system(size: 10, weight: on ? .black : .bold, design: .rounded))
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 8)
-                .background(on ? AppTheme.sunAmber : AppTheme.creamWarm.opacity(0.72))
-                .foregroundStyle(on ? .white : AppTheme.textMedium)
-                .clipShape(Capsule())
-                .animation(.spring(duration: 0.2), value: on)
+            }
+            Spacer()
+            HStack(spacing: 8) {
+                stepButton("minus") { if value > range.lowerBound { onChange(value - 1) } }
+                stepButton("plus")  { if value < range.upperBound { onChange(value + 1) } }
+            }
+        }
+    }
+
+    private func stepButton(_ icon: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: icon)
+                .font(.system(size: 14, weight: .semibold))
+                .frame(width: 36, height: 36)
+                .foregroundStyle(AppTheme.textDark)
+                .background(Circle().fill(.white.opacity(0.7)))
+                .overlay(Circle().strokeBorder(AppTheme.textDark.opacity(0.10), lineWidth: 1))
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+private struct FlowingChips: View {
+    let items: [String]
+    let selected: String
+    let onSelect: (String) -> Void
+
+    var body: some View {
+        FlowLayout(spacing: 6) {
+            ForEach(items, id: \.self) { item in
+                let on = item == selected
+                Button { onSelect(item) } label: {
+                    Text(item)
+                        .font(.system(size: 13, weight: .medium))
+                        .padding(.horizontal, 12).padding(.vertical, 7)
+                        .foregroundStyle(on ? .white : AppTheme.textDark)
+                        .background(
+                            Capsule().fill(on ? AnyShapeStyle(AppTheme.chipGradient) : AnyShapeStyle(.white.opacity(0.6)))
+                        )
+                        .overlay(Capsule().strokeBorder(on ? .clear : AppTheme.textDark.opacity(0.08), lineWidth: 1))
+                }
+                .buttonStyle(.plain)
             }
         }
     }
 }
+
+private struct FlowLayout: Layout {
+    var spacing: CGFloat = 8
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let maxWidth = proposal.width ?? .infinity
+        var x: CGFloat = 0; var y: CGFloat = 0; var rowH: CGFloat = 0
+        for sub in subviews {
+            let s = sub.sizeThatFits(.unspecified)
+            if x + s.width > maxWidth, x > 0 { x = 0; y += rowH + spacing; rowH = 0 }
+            x += s.width + spacing
+            rowH = max(rowH, s.height)
+        }
+        return CGSize(width: maxWidth, height: y + rowH)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        var x = bounds.minX; var y = bounds.minY; var rowH: CGFloat = 0
+        for sub in subviews {
+            let s = sub.sizeThatFits(.unspecified)
+            if x + s.width > bounds.maxX, x > bounds.minX { x = bounds.minX; y += rowH + spacing; rowH = 0 }
+            sub.place(at: CGPoint(x: x, y: y), proposal: ProposedViewSize(s))
+            x += s.width + spacing
+            rowH = max(rowH, s.height)
+        }
+    }
+}
+
