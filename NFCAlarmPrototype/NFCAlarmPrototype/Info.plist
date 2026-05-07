@@ -24,6 +24,8 @@
 	<true/>
 	<key>NFCReaderUsageDescription</key>
 	<string>Sunny uses scanning to confirm you are up and near your saved wake-up spot.</string>
+	<key>NSAlarmKitUsageDescription</key>
+	<string>Sunny schedules wake-up alarms that can ring prominently until you open the app and tap your NFC sticker.</string>
 	<key>NSSupportsLiveActivities</key>
 	<true/>
 	<key>UIApplicationSceneManifest</key>

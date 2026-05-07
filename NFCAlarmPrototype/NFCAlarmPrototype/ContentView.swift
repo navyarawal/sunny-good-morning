@@ -24,6 +24,7 @@ struct ContentView: View {
             }
         }
         .animation(.easeInOut(duration: 0.35), value: vm.route)
+        .preferredColorScheme(.light)
     }
 }
 
@@ -261,6 +262,11 @@ private struct MainTabsView: View {
             }
 
             VStack {
+                if vm.hasActiveSecondChance {
+                    SecondChanceBanner()
+                        .padding(.horizontal, UI.hPad)
+                        .padding(.top, UI.topInset)
+                }
                 Spacer()
                 FloatingTabBar(active: tab) { tab = $0 }
                     .padding(.horizontal, 16)
@@ -278,6 +284,49 @@ private struct MainTabsView: View {
                 }
             )
         }
+    }
+}
+
+private struct SecondChanceBanner: View {
+    @EnvironmentObject private var vm: AlarmAppViewModel
+
+    var body: some View {
+        FrostCard(corner: 20) {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(alignment: .top, spacing: 10) {
+                    Image(systemName: "sun.max.trianglebadge.exclamationmark.fill")
+                        .font(.system(size: 24, weight: .semibold))
+                        .foregroundStyle(AppTheme.accent)
+
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("Second chance")
+                            .font(.system(size: 17, weight: .bold))
+                            .foregroundStyle(AppTheme.textDark)
+                        Text(secondChanceText)
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundStyle(AppTheme.textMedium)
+                            .lineSpacing(1)
+                    }
+                }
+
+                Button {
+                    vm.startNFCScanForSecondChance()
+                } label: {
+                    Label(vm.isNFCScanning ? "Scanning..." : "Scan Sunny now", systemImage: "wave.3.right.circle.fill")
+                        .font(.system(size: 15, weight: .semibold))
+                }
+                .buttonStyle(PillButtonStyle(primary: true))
+                .disabled(vm.isNFCScanning)
+            }
+            .padding(16)
+        }
+    }
+
+    private var secondChanceText: String {
+        guard let deadline = vm.secondChanceDeadline else {
+            return "Scan your sticker to recover this wake-up."
+        }
+        return "Emergency dismiss used. Scan by \(deadline.formatted(date: .omitted, time: .shortened)) to count this as on time."
     }
 }
 
@@ -605,6 +654,8 @@ private struct CreateAlarmFlow: View {
                         labelRow
                         Divider().background(AppTheme.textDark.opacity(0.10)).padding(.leading, 18)
                         soundRow
+                        Divider().background(AppTheme.textDark.opacity(0.10)).padding(.leading, 18)
+                        volumeRow
                     }
 
                     Color.clear.frame(height: 32)
@@ -722,6 +773,48 @@ private struct CreateAlarmFlow: View {
                 .padding(.horizontal, 18).padding(.bottom, 14)
             }
         }
+    }
+
+    private var volumeRow: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text("Volume")
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundStyle(AppTheme.textDark)
+                Spacer()
+                Text("\(Int(alarm.volume * 100))%")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(AppTheme.textMedium)
+            }
+
+            Slider(
+                value: Binding(
+                    get: { Double(alarm.volume) },
+                    set: { newValue in
+                        alarm.volume = Float(newValue)
+                    }
+                ),
+                in: 0.25...1.0
+            ) {
+                Text("Alarm volume")
+            } minimumValueLabel: {
+                Image(systemName: "speaker.wave.1.fill")
+            } maximumValueLabel: {
+                Image(systemName: "speaker.wave.3.fill")
+            }
+            .tint(AppTheme.accent)
+
+            Button {
+                vm.alarmManager.previewSound(volume: alarm.volume, ringtone: alarm.ringtoneName)
+            } label: {
+                Label("Test volume", systemImage: "play.circle.fill")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(AppTheme.accent)
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 18)
+        .padding(.vertical, 14)
     }
 
     private var repeatSummary: String {
@@ -960,7 +1053,6 @@ private struct CreateAlarmFlow: View {
 
 private struct ProfileScreen: View {
     @EnvironmentObject private var vm: AlarmAppViewModel
-    private let testStreaks = [0, 3, 7, 14, 21, 30, 50]
 
     var body: some View {
         ScrollView {
@@ -981,8 +1073,6 @@ private struct ProfileScreen: View {
                 }
 
                 tierCard.padding(.horizontal, UI.hPad).padding(.top, 22)
-
-                streakTester.padding(.horizontal, UI.hPad).padding(.top, 16)
 
                 growthLadder.padding(.top, 20)
 
@@ -1143,50 +1233,6 @@ private struct ProfileScreen: View {
         }
     }
 
-    private var streakTester: some View {
-        FrostCard(corner: 20) {
-            VStack(alignment: .leading, spacing: 14) {
-                HStack {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("STREAK LAB")
-                            .font(.system(size: 11, weight: .semibold))
-                            .tracking(1.2)
-                            .foregroundStyle(AppTheme.textMedium)
-                        Text("Preview Sunny's growth")
-                            .font(.system(size: 15, weight: .semibold))
-                            .foregroundStyle(AppTheme.textDark)
-                    }
-                    Spacer()
-                    Stepper("", value: $vm.wakeStreak, in: 0...75)
-                        .labelsHidden()
-                }
-
-                FlowLayout(spacing: 7) {
-                    ForEach(testStreaks, id: \.self) { streak in
-                        let active = vm.wakeStreak == streak
-                        Button {
-                            withAnimation(.spring(duration: 0.35, bounce: 0.18)) {
-                                vm.wakeStreak = streak
-                            }
-                        } label: {
-                            Text("\(streak)d")
-                                .font(.system(size: 13, weight: .semibold))
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 8)
-                                .foregroundStyle(active ? .white : AppTheme.textDark)
-                                .background(
-                                    Capsule().fill(active ? AnyShapeStyle(AppTheme.chipGradient) : AnyShapeStyle(.white.opacity(0.58)))
-                                )
-                                .overlay(Capsule().strokeBorder(active ? .clear : AppTheme.textDark.opacity(0.08), lineWidth: 1))
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-            }
-            .padding(16)
-        }
-    }
-
     private var onTimeValue: String {
         guard vm.wakeStreak > 0 else { return "0%" }
         return "\(min(99, 78 + vm.wakeStreak / 2))%"
@@ -1209,53 +1255,117 @@ private struct AlarmRingingScreen: View {
         ZStack {
             AppTheme.alarmGradient.ignoresSafeArea()
 
-            VStack(spacing: 0) {
-                Spacer()
-                Text(Date.now.formatted(date: .omitted, time: .shortened))
-                    .font(.system(size: 64, weight: .bold))
-                    .foregroundStyle(.white)
-                    .scaleEffect(pulseScale)
-                    .onAppear {
-                        withAnimation(.easeInOut(duration: 0.6).repeatForever(autoreverses: true)) {
-                            pulseScale = 1.06
+            if vm.isEmergencyDismissActive {
+                emergencyDismissView
+            } else {
+                VStack(spacing: 0) {
+                    Spacer()
+                    Text(Date.now.formatted(date: .omitted, time: .shortened))
+                        .font(.system(size: 64, weight: .bold))
+                        .foregroundStyle(.white)
+                        .scaleEffect(pulseScale)
+                        .onAppear {
+                            withAnimation(.easeInOut(duration: 0.6).repeatForever(autoreverses: true)) {
+                                pulseScale = 1.06
+                            }
+                        }
+                    Text("Time to wake up!")
+                        .font(.system(size: 22, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.85))
+                        .padding(.top, 6)
+
+                    Spacer()
+
+                    SunMascotView(level: vm.sunLevel, mood: .happy, size: 160)
+
+                    Text("Get up and find Sunny.")
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundStyle(.white.opacity(0.85))
+                        .padding(.top, 12)
+
+                    Spacer()
+
+                    VStack(spacing: 14) {
+                        Button {
+                            vm.startNFCScanForDismissal()
+                        } label: {
+                            HStack(spacing: 10) {
+                                Image(systemName: "wave.3.right.circle.fill").font(.system(size: 22))
+                                Text(vm.isNFCScanning ? "Scanning…" : "Find Sunny")
+                            }
+                        }
+                        .buttonStyle(PillButtonStyle(primary: false))
+                        .disabled(vm.isNFCScanning)
+
+                        Button("Emergency dismiss") {
+                            vm.beginEmergencyDismiss()
+                        }
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.78))
+
+                        if let err = vm.nfcError {
+                            Text(err)
+                                .font(.system(size: 13))
+                                .foregroundStyle(.white)
                         }
                     }
-                Text("Time to wake up!")
-                    .font(.system(size: 22, weight: .semibold))
-                    .foregroundStyle(.white.opacity(0.85))
-                    .padding(.top, 6)
-
-                Spacer()
-
-                SunMascotView(level: vm.sunLevel, mood: .happy, size: 160)
-
-                Text("Get up and find Sunny.")
-                    .font(.system(size: 16, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.85))
-                    .padding(.top, 12)
-
-                Spacer()
-
-                VStack(spacing: 14) {
-                    Button {
-                        vm.startNFCScanForDismissal()
-                    } label: {
-                        HStack(spacing: 10) {
-                            Image(systemName: "wave.3.right.circle.fill").font(.system(size: 22))
-                            Text(vm.isNFCScanning ? "Scanning…" : "Find Sunny")
-                        }
-                    }
-                    .buttonStyle(PillButtonStyle(primary: false))
-                    .disabled(vm.isNFCScanning)
-
-                    if let err = vm.nfcError {
-                        Text(err)
-                            .font(.system(size: 13))
-                            .foregroundStyle(.white)
-                    }
+                    .padding(.horizontal, UI.hPad).padding(.bottom, UI.bottomInset)
                 }
-                .padding(.horizontal, UI.hPad).padding(.bottom, UI.bottomInset)
             }
+        }
+    }
+
+    private var emergencyDismissView: some View {
+        VStack(spacing: 0) {
+            Spacer().frame(height: UI.topInset + 28)
+
+            Text("Emergency dismiss")
+                .font(.system(size: 30, weight: .bold))
+                .foregroundStyle(.white)
+            Text("Tap the moving button \(vm.emergencyTapsRemaining) more times.")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(.white.opacity(0.82))
+                .multilineTextAlignment(.center)
+                .padding(.top, 8)
+                .padding(.horizontal, UI.hPad)
+
+            Spacer()
+
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 5), spacing: 8) {
+                ForEach(0..<25, id: \.self) { index in
+                    Button {
+                        if index == vm.emergencyGridPosition {
+                            vm.registerEmergencyTap()
+                        }
+                    } label: {
+                        ZStack {
+                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                .fill(.white.opacity(index == vm.emergencyGridPosition ? 0.95 : 0.18))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                        .strokeBorder(.white.opacity(0.35), lineWidth: 1)
+                                )
+                            if index == vm.emergencyGridPosition {
+                                Text("\(vm.emergencyTapsRemaining)")
+                                    .font(.system(size: 16, weight: .black))
+                                    .foregroundStyle(AppTheme.accentLow)
+                            }
+                        }
+                        .aspectRatio(1, contentMode: .fit)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal, UI.hPad)
+
+            Spacer()
+
+            Button("Back to NFC scan") {
+                vm.isEmergencyDismissActive = false
+            }
+            .buttonStyle(PillButtonStyle(primary: false))
+            .padding(.horizontal, UI.hPad)
+            .padding(.bottom, UI.bottomInset)
         }
     }
 }

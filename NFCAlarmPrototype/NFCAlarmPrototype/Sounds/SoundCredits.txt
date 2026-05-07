@@ -1,0 +1,19 @@
+Sunny alarm sounds
+==================
+
+Bundled wake-up sounds are WAV files because both AVAudioPlayer and iOS local
+notification custom sounds handle them reliably.
+
+License-safe sources used for the replacement alarm set:
+
+- rise_classic.wav: "Annoying Alarm Clock" by UncleKornicob, SoundBible, Public Domain.
+  Source: https://soundbible.com/1787-Annoying-Alarm-Clock.html
+- rise_urgent.wav: "Siren Noise" by KevanGC, SoundBible, Public Domain.
+  Source: https://soundbible.com/1577-Siren-Noise.html
+- rise_pulse.wav: "Annoying Alien Buzzer" by Kevan, SoundBible, Public Domain.
+  Source: https://soundbible.com/1811-Annoying-Alien-Buzzer.html
+- rise_gentle.wav: "Ticking Clock" by KevanGC, SoundBible, Public Domain.
+  Source: https://soundbible.com/1580-Ticking-Clock.html
+
+rise_chime.wav is the existing app-generated chime retained as the softer
+option.

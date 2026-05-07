@@ -111,10 +111,27 @@ enum AppRoute: Equatable {
 
 @MainActor
 final class AlarmAppViewModel: ObservableObject {
+    private enum DefaultsKey {
+        static let pendingAlarmID = "pendingAlarmID"
+        static let pendingAlarmStartedAt = "pendingAlarmStartedAt"
+        static let emergencyDismissUseCount = "emergencyDismissUseCount"
+        static let emergencyDismissDay = "emergencyDismissDay"
+        static let secondChanceAlarmID = "secondChanceAlarmID"
+        static let secondChanceDeadline = "secondChanceDeadline"
+    }
+
+    private let emergencyBaseTapCount = 25
+    private let emergencyTapIncrement = 10
+    private let secondChanceWindowSeconds: TimeInterval = 10 * 60
+
     @Published var route: AppRoute = .onboarding
     @Published var sunMood: SunMood = .idle
     @Published var nfcError: String?
     @Published var isNFCScanning = false
+    @Published var isEmergencyDismissActive = false
+    @Published var emergencyTapsRemaining = 0
+    @Published var emergencyGridPosition = Int.random(in: 0..<25)
+    @Published var secondChanceDeadline: Date?
     @Published private(set) var currentCheckInRound = 0
 
     @Published var wakeStreak: Int = 0 {
@@ -135,15 +152,20 @@ final class AlarmAppViewModel: ObservableObject {
     let nfcManager = NFCManager()
     let alarmManager = AlarmManager()
     private var cancellables = Set<AnyCancellable>()
+    private var secondChanceTimer: Timer?
 
     init() {
         wakeStreak = UserDefaults.standard.integer(forKey: "wakeStreak")
+        secondChanceDeadline = UserDefaults.standard.object(forKey: DefaultsKey.secondChanceDeadline) as? Date
         loadAlarms()
+        if !UserDefaults.standard.bool(forKey: "hasCompletedSetup"),
+           (!alarms.isEmpty || nfcManager.registeredTagID != nil) {
+            UserDefaults.standard.set(true, forKey: "hasCompletedSetup")
+        }
+        route = shouldShowOnboarding ? .onboarding : .home
+        UserDefaults.standard.set(Date(), forKey: "lastAppOpenDate")
         let active = alarms.filter(\.isEnabled)
         active.forEach { alarmManager.scheduleAlarm($0, activeAlarmsCount: active.count) }
-        if nfcManager.registeredTagID != nil {
-            route = .home
-        }
         NotificationCenter.default
             .publisher(for: .alarmDidFire)
             .receive(on: RunLoop.main)
@@ -158,6 +180,9 @@ final class AlarmAppViewModel: ObservableObject {
         alarmManager.onAlarmFired = { [weak self] alarmID in
             self?.triggerAlarmRinging(alarmID: alarmID)
         }
+        resolvePendingAlarmIfNeeded()
+        resolveExpiredSecondChanceIfNeeded()
+        scheduleSecondChanceExpiryTimerIfNeeded()
     }
 
     // MARK: App lifecycle
@@ -171,6 +196,7 @@ final class AlarmAppViewModel: ObservableObject {
     func appDidBecomeActive() {
         // Cancel background timers — foreground handles alarms via willPresent delegate
         alarmManager.stopBackgroundMode()
+        resolveExpiredSecondChanceIfNeeded()
     }
 
     // MARK: Persistence
@@ -186,6 +212,15 @@ final class AlarmAppViewModel: ObservableObject {
            let saved = try? JSONDecoder().decode([AlarmItem].self, from: data) {
             alarms = saved
         }
+    }
+
+    private var shouldShowOnboarding: Bool {
+        let hasCompletedSetup = UserDefaults.standard.bool(forKey: "hasCompletedSetup")
+        guard hasCompletedSetup else { return true }
+        if alarms.isEmpty { return true }
+        guard let lastOpen = UserDefaults.standard.object(forKey: "lastAppOpenDate") as? Date else { return false }
+        let inactiveDays = Calendar.current.dateComponents([.day], from: lastOpen, to: Date()).day ?? 0
+        return inactiveDays >= 60
     }
 
     // MARK: Computed
@@ -264,6 +299,7 @@ final class AlarmAppViewModel: ObservableObject {
     func finishSetup() {
         alarms.append(onboardingAlarm)
         alarmManager.scheduleAlarm(onboardingAlarm, activeAlarmsCount: activeAlarmsCount)
+        UserDefaults.standard.set(true, forKey: "hasCompletedSetup")
         route = .home
     }
 
@@ -275,7 +311,12 @@ final class AlarmAppViewModel: ObservableObject {
         } else {
             activeAlarm = alarms.first(where: { $0.isEnabled })
         }
+        if let id = activeAlarm?.id.uuidString {
+            UserDefaults.standard.set(id, forKey: DefaultsKey.pendingAlarmID)
+            UserDefaults.standard.set(Date(), forKey: DefaultsKey.pendingAlarmStartedAt)
+        }
         currentCheckInRound = 0
+        isEmergencyDismissActive = false
         sunMood = .excited
         route = .alarmRinging
         resumeAlarmAudio()
@@ -297,12 +338,136 @@ final class AlarmAppViewModel: ObservableObject {
             if matched {
                 let id = self.activeAlarm?.id.uuidString ?? ""
                 self.alarmManager.dismissAlarm(alarmID: id)
+                self.clearPendingAlarm()
                 self.sunMood = .happy
                 self.route = .checkIn
             } else {
                 self.nfcError = "Wrong sticker — tap your registered one."
             }
         }
+    }
+
+    // MARK: Emergency dismiss
+
+    func beginEmergencyDismiss() {
+        resetEmergencyCountIfNeeded()
+        let priorUses = UserDefaults.standard.integer(forKey: DefaultsKey.emergencyDismissUseCount)
+        emergencyTapsRemaining = emergencyBaseTapCount + priorUses * emergencyTapIncrement
+        emergencyGridPosition = Int.random(in: 0..<25)
+        isEmergencyDismissActive = true
+    }
+
+    func registerEmergencyTap() {
+        guard emergencyTapsRemaining > 0 else { return }
+        emergencyTapsRemaining -= 1
+        emergencyGridPosition = Int.random(in: 0..<25)
+        if emergencyTapsRemaining == 0 {
+            let id = activeAlarm?.id.uuidString ?? ""
+            alarmManager.dismissAlarm(alarmID: id)
+            let priorUses = UserDefaults.standard.integer(forKey: DefaultsKey.emergencyDismissUseCount)
+            UserDefaults.standard.set(priorUses + 1, forKey: DefaultsKey.emergencyDismissUseCount)
+            UserDefaults.standard.set(todayStamp, forKey: DefaultsKey.emergencyDismissDay)
+            clearPendingAlarm()
+            startSecondChance(for: id)
+            isEmergencyDismissActive = false
+            sunMood = .worried
+            route = .home
+        }
+    }
+
+    func startNFCScanForSecondChance() {
+        resolveExpiredSecondChanceIfNeeded()
+        guard hasActiveSecondChance else { return }
+
+        nfcError = nil
+        isNFCScanning = true
+        nfcManager.validateTagForDismissal { [weak self] matched in
+            guard let self else { return }
+            self.isNFCScanning = false
+            if matched {
+                self.completeSecondChanceWake()
+            } else {
+                self.nfcError = "Wrong sticker — tap your registered one."
+            }
+        }
+    }
+
+    var hasActiveSecondChance: Bool {
+        guard let deadline = secondChanceDeadline else { return false }
+        return deadline > Date()
+    }
+
+    private func startSecondChance(for alarmID: String) {
+        let deadline = Date().addingTimeInterval(secondChanceWindowSeconds)
+        secondChanceDeadline = deadline
+        UserDefaults.standard.set(alarmID, forKey: DefaultsKey.secondChanceAlarmID)
+        UserDefaults.standard.set(deadline, forKey: DefaultsKey.secondChanceDeadline)
+        scheduleSecondChanceExpiryTimerIfNeeded()
+        alarmManager.scheduleSecondChanceNotification(deadline: deadline)
+    }
+
+    private func completeSecondChanceWake() {
+        clearSecondChance()
+        let levelBefore = sunLevel
+        wakeStreak += 1
+        sunMood = sunLevel != levelBefore ? .celebrating : .happy
+        route = sunLevel != levelBefore ? .levelUp : .home
+    }
+
+    private func resolveExpiredSecondChanceIfNeeded() {
+        guard let deadline = secondChanceDeadline, deadline <= Date() else { return }
+        clearSecondChance()
+        wakeStreak = 0
+        sunMood = .worried
+        if route != .onboarding {
+            route = .home
+        }
+    }
+
+    private func resolvePendingAlarmIfNeeded() {
+        guard UserDefaults.standard.string(forKey: DefaultsKey.pendingAlarmID) != nil else { return }
+        clearPendingAlarm()
+        wakeStreak = 0
+        sunMood = .worried
+        if route != .onboarding {
+            route = .home
+        }
+    }
+
+    private func clearPendingAlarm() {
+        UserDefaults.standard.removeObject(forKey: DefaultsKey.pendingAlarmID)
+        UserDefaults.standard.removeObject(forKey: DefaultsKey.pendingAlarmStartedAt)
+    }
+
+    private func clearSecondChance() {
+        secondChanceTimer?.invalidate()
+        secondChanceTimer = nil
+        secondChanceDeadline = nil
+        UserDefaults.standard.removeObject(forKey: DefaultsKey.secondChanceAlarmID)
+        UserDefaults.standard.removeObject(forKey: DefaultsKey.secondChanceDeadline)
+    }
+
+    private func scheduleSecondChanceExpiryTimerIfNeeded() {
+        secondChanceTimer?.invalidate()
+        guard let deadline = secondChanceDeadline else { return }
+        let interval = max(0.1, deadline.timeIntervalSinceNow)
+        secondChanceTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: false) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.resolveExpiredSecondChanceIfNeeded()
+            }
+        }
+    }
+
+    private func resetEmergencyCountIfNeeded() {
+        let storedDay = UserDefaults.standard.string(forKey: DefaultsKey.emergencyDismissDay)
+        guard storedDay != nil, storedDay != todayStamp else { return }
+        UserDefaults.standard.set(0, forKey: DefaultsKey.emergencyDismissUseCount)
+        UserDefaults.standard.set(todayStamp, forKey: DefaultsKey.emergencyDismissDay)
+    }
+
+    private var todayStamp: String {
+        let components = Calendar.current.dateComponents([.year, .month, .day], from: Date())
+        return "\(components.year ?? 0)-\(components.month ?? 0)-\(components.day ?? 0)"
     }
 
     // MARK: Check-in

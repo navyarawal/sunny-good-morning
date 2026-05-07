@@ -24,6 +24,7 @@ final class AlarmManager: NSObject {
     // alarm at the exact target time.
     private var keepAlivePlayer: AVAudioPlayer?
     private var alarmTriggers: [String: DispatchWorkItem] = [:]
+    private let systemAlarmScheduler = SystemAlarmScheduler()
 
     var onAlarmFired: ((String) -> Void)?
 
@@ -32,6 +33,13 @@ final class AlarmManager: NSObject {
         UNUserNotificationCenter.current().delegate = self
         registerNotificationCategories()
         SoundLoopGenerator.ensureLoops(ringtoneNames: Self.ringtoneNames)
+        systemAlarmScheduler.startObservingAlarmUpdates { alarmID in
+            NotificationCenter.default.post(
+                name: .alarmDidFire,
+                object: nil,
+                userInfo: ["alarmID": alarmID]
+            )
+        }
     }
 
     // MARK: - Permissions
@@ -39,7 +47,10 @@ final class AlarmManager: NSObject {
     func requestPermissions(completion: @escaping (Bool) -> Void) {
         UNUserNotificationCenter.current()
             .requestAuthorization(options: [.alert, .sound, .badge]) { granted, _ in
-                DispatchQueue.main.async { completion(granted) }
+                Task {
+                    let alarmKitGranted = await self.systemAlarmScheduler.requestAuthorizationIfPossible()
+                    await MainActor.run { completion(granted || alarmKitGranted) }
+                }
             }
     }
 
@@ -90,10 +101,18 @@ final class AlarmManager: NSObject {
             let request = UNNotificationRequest(identifier: id, content: content, trigger: trigger)
             UNUserNotificationCenter.current().add(request)
         }
+
+        Task { [systemAlarmScheduler] in
+            let didScheduleSystemAlarm = await systemAlarmScheduler.schedule(alarm, soundName: soundFilename)
+            if didScheduleSystemAlarm {
+                self.cancelChain(alarmID: alarm.id.uuidString)
+            }
+        }
     }
 
     func cancelAlarm(_ alarm: AlarmItem) {
         cancelChain(alarmID: alarm.id.uuidString)
+        systemAlarmScheduler.cancel(id: alarm.id)
         alarmTriggers[alarm.id.uuidString]?.cancel()
         alarmTriggers.removeValue(forKey: alarm.id.uuidString)
     }
@@ -111,11 +130,29 @@ final class AlarmManager: NSObject {
     func dismissAlarm(alarmID: String) {
         stopAlarmAudio()
         cancelChain(alarmID: alarmID)
+        if let id = UUID(uuidString: alarmID) {
+            systemAlarmScheduler.stop(id: id)
+        }
         alarmTriggers[alarmID]?.cancel()
         alarmTriggers.removeValue(forKey: alarmID)
         if #available(iOS 16.2, *) {
             LiveActivityController.shared.end(alarmID: alarmID)
         }
+    }
+
+    func scheduleSecondChanceNotification(deadline: Date) {
+        let content = UNMutableNotificationContent()
+        content.title = "Second chance active"
+        content.body = "Scan Sunny by \(deadline.formatted(date: .omitted, time: .shortened)) and this still counts as an on-time wake-up."
+        content.sound = .default
+        content.interruptionLevel = .timeSensitive
+
+        let request = UNNotificationRequest(
+            identifier: "second-chance-active",
+            content: content,
+            trigger: UNTimeIntervalNotificationTrigger(timeInterval: 1, repeats: false)
+        )
+        UNUserNotificationCenter.current().add(request)
     }
 
     /// Starts the Live Activity for a firing alarm. Idempotent — the controller
