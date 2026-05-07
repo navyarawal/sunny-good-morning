@@ -25,15 +25,66 @@ enum AppTheme {
     // MARK: Sunrise gradient
 
     static var sunriseBackground: LinearGradient {
-        LinearGradient(
-            stops: [
-                .init(color: Color(red: 1.00, green: 0.702, blue: 0.416), location: 0.00),  // #FFB36A
-                .init(color: Color(red: 1.00, green: 0.788, blue: 0.478), location: 0.18),  // #FFC97A
-                .init(color: Color(red: 1.00, green: 0.878, blue: 0.541), location: 0.38),  // #FFE08A
-                .init(color: Color(red: 0.988, green: 0.929, blue: 0.690), location: 0.55), // #FCEDB0
-                .init(color: Color(red: 0.863, green: 0.910, blue: 0.910), location: 0.75), // #DCE8E8
-                .init(color: Color(red: 0.718, green: 0.808, blue: 0.878), location: 1.00)  // #B7CEE0
-            ],
+        evolutionBackground(for: .seedling)
+    }
+
+    static func evolutionBackground(for level: SunLevel) -> LinearGradient {
+        let stops: [Gradient.Stop]
+        switch level {
+        case .seedling:
+            stops = [
+                .init(color: Color(red: 1.00, green: 0.702, blue: 0.416), location: 0.00),
+                .init(color: Color(red: 1.00, green: 0.878, blue: 0.541), location: 0.42),
+                .init(color: Color(red: 0.530, green: 0.678, blue: 0.820), location: 0.78),
+                .init(color: Color(red: 0.105, green: 0.165, blue: 0.325), location: 1.00)
+            ]
+        case .rising:
+            stops = [
+                .init(color: Color(red: 1.00, green: 0.584, blue: 0.322), location: 0.00),
+                .init(color: Color(red: 1.00, green: 0.792, blue: 0.420), location: 0.34),
+                .init(color: Color(red: 0.440, green: 0.586, blue: 0.786), location: 0.76),
+                .init(color: Color(red: 0.070, green: 0.120, blue: 0.270), location: 1.00)
+            ]
+        case .shining:
+            stops = [
+                .init(color: Color(red: 1.00, green: 0.494, blue: 0.255), location: 0.00),
+                .init(color: Color(red: 0.980, green: 0.802, blue: 0.274), location: 0.30),
+                .init(color: Color(red: 0.380, green: 0.520, blue: 0.760), location: 0.70),
+                .init(color: Color(red: 0.050, green: 0.092, blue: 0.240), location: 1.00)
+            ]
+        case .glowing:
+            stops = [
+                .init(color: Color(red: 1.00, green: 0.408, blue: 0.196), location: 0.00),
+                .init(color: Color(red: 1.00, green: 0.690, blue: 0.220), location: 0.30),
+                .init(color: Color(red: 0.300, green: 0.400, blue: 0.700), location: 0.68),
+                .init(color: Color(red: 0.040, green: 0.064, blue: 0.200), location: 1.00)
+            ]
+        case .radiant:
+            stops = [
+                .init(color: Color(red: 1.00, green: 0.328, blue: 0.168), location: 0.00),
+                .init(color: Color(red: 1.00, green: 0.604, blue: 0.160), location: 0.24),
+                .init(color: Color(red: 0.236, green: 0.304, blue: 0.630), location: 0.62),
+                .init(color: Color(red: 0.028, green: 0.038, blue: 0.150), location: 1.00)
+            ]
+        case .blazing:
+            stops = [
+                .init(color: Color(red: 1.00, green: 0.252, blue: 0.112), location: 0.00),
+                .init(color: Color(red: 0.930, green: 0.380, blue: 0.120), location: 0.22),
+                .init(color: Color(red: 0.170, green: 0.210, blue: 0.500), location: 0.58),
+                .init(color: Color(red: 0.018, green: 0.020, blue: 0.100), location: 1.00)
+            ]
+        case .legendary:
+            stops = [
+                .init(color: Color(red: 1.00, green: 0.294, blue: 0.294), location: 0.00),
+                .init(color: Color(red: 1.00, green: 0.792, blue: 0.254), location: 0.18),
+                .init(color: Color(red: 0.275, green: 0.860, blue: 0.590), location: 0.42),
+                .init(color: Color(red: 0.190, green: 0.480, blue: 1.000), location: 0.66),
+                .init(color: Color(red: 0.420, green: 0.160, blue: 0.720), location: 0.84),
+                .init(color: Color(red: 0.030, green: 0.020, blue: 0.130), location: 1.00)
+            ]
+        }
+        return LinearGradient(
+            stops: stops,
             startPoint: .top,
             endPoint: .bottom
         )
@@ -111,10 +162,24 @@ enum UI {
 // MARK: - Sunrise background view (gradient + aura)
 
 struct SunriseBackground: View {
+    @EnvironmentObject private var vm: AlarmAppViewModel
+
     var body: some View {
         ZStack {
-            AppTheme.sunriseBackground
+            AppTheme.evolutionBackground(for: vm.sunLevel)
             AppTheme.sunriseAura
+
+            if vm.sunLevel == .legendary {
+                LinearGradient(
+                    colors: [
+                        Color(red: 1.0, green: 0.25, blue: 0.55).opacity(0.22),
+                        Color(red: 0.30, green: 0.75, blue: 1.0).opacity(0.18),
+                        Color(red: 0.96, green: 0.78, blue: 0.20).opacity(0.18)
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            }
         }
         .ignoresSafeArea()
     }

@@ -572,9 +572,9 @@ private struct CreateAlarmFlow: View {
     private let weekdayLetters = ["M", "T", "W", "T", "F", "S", "S"]
 
     var body: some View {
-        // Single root VStack — predictable top-down layout.
-        // Each step VStack claims .infinity height and lays out header/scroll/buttons explicitly.
-        VStack(spacing: 0) {
+        ZStack {
+            SunriseBackground()
+
             switch step {
             case 1: detailsStep
             case 2: checkInStep
@@ -582,18 +582,6 @@ private struct CreateAlarmFlow: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(SunriseBackground())
-        .overlay(alignment: .topLeading) {
-            Text("v6")
-                .font(.system(size: 9, weight: .black))
-                .foregroundStyle(.white)
-                .padding(.horizontal, 6)
-                .padding(.vertical, 4)
-                .background(Capsule().fill(Color(red: 1.0, green: 0.0, blue: 0.5)))
-                .padding(.leading, 4)
-                .padding(.top, 2)
-                .allowsHitTesting(false)
-        }
         .animation(.easeInOut(duration: 0.25), value: step)
     }
 
@@ -601,58 +589,54 @@ private struct CreateAlarmFlow: View {
 
     private var detailsStep: some View {
         VStack(spacing: 0) {
-            // HEADER — pinned at top
-            HStack {
-                Button("Cancel", action: onCancel)
-                    .font(.system(size: 17))
-                    .foregroundStyle(AppTheme.accent)
-                Spacer()
-                Text("Add Alarm")
-                    .font(.system(size: 17, weight: .semibold))
-                    .foregroundStyle(AppTheme.textDark)
-                Spacer()
-                Button("Save") { step = 2 }
-                    .font(.system(size: 17, weight: .semibold))
-                    .foregroundStyle(AppTheme.accent)
-            }
-            .padding(.top, UI.topInset)
-            .padding(.horizontal, UI.hPad)
-            .padding(.bottom, 12)
+            topHeader(title: "Add Alarm", left: .text("Cancel", onCancel), right: .text("Save", { step = 2 }))
 
-            // MIDDLE — greedy ScrollView
-            ScrollView {
-                VStack(spacing: 20) {
+            ScrollView(showsIndicators: false) {
+                VStack(spacing: 22) {
                     DatePicker("", selection: $alarm.date, displayedComponents: .hourAndMinute)
                         .datePickerStyle(.wheel)
                         .labelsHidden()
-                        .frame(height: 200)
+                        .frame(height: 210)
+                        .padding(.top, 6)
 
-                    VStack(spacing: 0) {
+                    formCard {
                         repeatRow
                         Divider().background(AppTheme.textDark.opacity(0.10)).padding(.leading, 18)
                         labelRow
                         Divider().background(AppTheme.textDark.opacity(0.10)).padding(.leading, 18)
                         soundRow
                     }
-                    .background(
-                        RoundedRectangle(cornerRadius: 16, style: .continuous)
-                            .fill(.ultraThinMaterial)
-                            .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(.white.opacity(0.45)))
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 16, style: .continuous)
-                            .strokeBorder(.white.opacity(0.65), lineWidth: 1)
-                    )
-                    .shadow(color: Color(red: 0.55, green: 0.35, blue: 0.16).opacity(0.08), radius: 12, x: 0, y: 6)
 
-                    Spacer(minLength: UI.bottomInset)
+                    Color.clear.frame(height: 32)
                 }
                 .padding(.horizontal, UI.hPad)
-                .padding(.top, 8)
             }
             .frame(maxHeight: .infinity)
+
+            Button("Continue") { step = 2 }
+                .buttonStyle(PillButtonStyle(primary: true))
+                .padding(.horizontal, UI.hPad)
+                .padding(.top, 14)
+                .padding(.bottom, UI.bottomInset)
+                .background(footerFade)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private func formCard<Content: View>(@ViewBuilder content: () -> Content) -> some View {
+        VStack(spacing: 0) {
+            content()
+        }
+        .background(
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .fill(.ultraThinMaterial)
+                .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).fill(.white.opacity(0.48)))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .strokeBorder(.white.opacity(0.70), lineWidth: 1)
+        )
+        .shadow(color: Color(red: 0.55, green: 0.35, blue: 0.16).opacity(0.10), radius: 16, x: 0, y: 8)
     }
 
     private var repeatRow: some View {
@@ -753,28 +737,27 @@ private struct CreateAlarmFlow: View {
 
     private var checkInStep: some View {
         VStack(spacing: 0) {
-            // HEADER
-            stepHeader(label: "STEP 2 OF 3", trailing: nil) { step = 1 }
+            topHeader(title: "STEP 2 OF 3", left: .back { step = 1 }, right: .empty)
 
-            // MIDDLE — greedy ScrollView
-            ScrollView {
+            ScrollView(showsIndicators: false) {
                 VStack(spacing: 0) {
                     SunMascotView(level: .seedling, mood: .happy, size: 96)
-                        .padding(.top, 18)
+                        .padding(.top, 20)
 
-                    Text("Want wake-up\ncheck-ins?")
-                        .font(.system(size: 26, weight: .bold))
-                        .multilineTextAlignment(.center)
-                        .foregroundStyle(AppTheme.textDark)
-                        .padding(.top, 18)
-                        .lineSpacing(2)
+                    VStack(spacing: 10) {
+                        Text("Wake-up check-ins")
+                            .font(.system(size: 32, weight: .bold))
+                            .foregroundStyle(AppTheme.textDark)
+                            .multilineTextAlignment(.center)
 
-                    Text("The alarm can ring a few more times after you dismiss — to make sure you're really up.")
-                        .font(.system(size: 14.5))
-                        .multilineTextAlignment(.center)
-                        .foregroundStyle(AppTheme.textMedium)
-                        .padding(.top, 10)
-                        .padding(.horizontal, 36)
+                        Text("Sunny can ring again after you dismiss, so you're not back asleep two minutes later.")
+                            .font(.system(size: 16))
+                            .foregroundStyle(AppTheme.textMedium)
+                            .multilineTextAlignment(.center)
+                            .lineSpacing(2)
+                            .frame(maxWidth: 310)
+                    }
+                    .padding(.top, 22)
 
                     FrostCard(corner: 22) {
                         VStack(spacing: 0) {
@@ -796,91 +779,70 @@ private struct CreateAlarmFlow: View {
                         }
                         .padding(18)
                     }
-                    .padding(.top, 18).padding(.horizontal, UI.hPad)
+                    .padding(.top, 28)
+                    .padding(.horizontal, UI.hPad)
 
-                    Spacer(minLength: 12)
+                    Color.clear.frame(height: 118)
                 }
                 .frame(maxWidth: .infinity)
             }
             .frame(maxHeight: .infinity)
 
-            // BOTTOM
-            HStack(spacing: 10) {
+            HStack(spacing: 12) {
                 Button("Skip") { step = 3 }
                     .buttonStyle(PillButtonStyle(primary: false))
                 Button("Add check-ins") { step = 3 }
                     .buttonStyle(PillButtonStyle(primary: true))
             }
-            .padding(.horizontal, UI.hPad).padding(.bottom, UI.bottomInset).padding(.top, 12)
+            .padding(.horizontal, UI.hPad)
+            .padding(.top, 14)
+            .padding(.bottom, UI.bottomInset)
+            .background(footerFade)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
-
-    // Shared header used by steps 2 & 3 — guarantees identical Y position.
-    private func stepHeader(label: String, trailing: String?, onBack: @escaping () -> Void) -> some View {
-        HStack {
-            Button(action: onBack) {
-                HStack(spacing: 4) {
-                    Image(systemName: "chevron.left").font(.system(size: 14, weight: .semibold))
-                    Text("Back")
-                }
-                .font(.system(size: 16, weight: .medium))
-                .foregroundStyle(AppTheme.textMedium)
-            }
-            Spacer()
-            Text(label)
-                .font(.system(size: 13, weight: .semibold))
-                .tracking(1.2)
-                .foregroundStyle(AppTheme.textMedium)
-            Spacer()
-            if let trailing {
-                Button(trailing) { onSave(alarm) }
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundStyle(AppTheme.accent)
-            } else {
-                Color.clear.frame(width: 60)
-            }
-        }
-        .padding(.top, UI.topInset)
-        .padding(.horizontal, UI.hPad)
-        .padding(.bottom, 12)
     }
 
     // MARK: Step 3 — NFC placement
 
     private var nfcPlacementStep: some View {
         VStack(spacing: 0) {
-            // HEADER
-            stepHeader(label: "STEP 3 OF 3", trailing: "Skip") { step = 2 }
+            topHeader(title: "STEP 3 OF 3", left: .back { step = 2 }, right: .text("Skip", { onSave(alarm) }))
 
-            // MIDDLE
-            ScrollView {
-                VStack(spacing: 22) {
-                    NFCBadge(size: 130).padding(.top, 12)
+            ScrollView(showsIndicators: false) {
+                VStack(spacing: 0) {
+                    NFCBadge(size: 118)
+                        .padding(.top, 16)
 
-                    Text("Place your\nSunny sticker.")
-                        .font(.system(size: 26, weight: .bold))
-                        .multilineTextAlignment(.center)
-                        .foregroundStyle(AppTheme.textDark)
-                        .lineSpacing(2)
+                    VStack(spacing: 11) {
+                        Text("Place your\nSunny sticker")
+                            .font(.system(size: 32, weight: .bold))
+                            .foregroundStyle(AppTheme.textDark)
+                            .multilineTextAlignment(.center)
+                            .lineSpacing(1)
 
-                    Text("Stick it across the room — somewhere you have to **get out of bed** to reach.")
-                        .font(.system(size: 15))
-                        .multilineTextAlignment(.center)
-                        .foregroundStyle(AppTheme.textMedium)
-                        .padding(.horizontal, 32)
+                        Text("Put it across the room — somewhere you have to **get out of bed** to reach.")
+                            .font(.system(size: 16))
+                            .foregroundStyle(AppTheme.textMedium)
+                            .multilineTextAlignment(.center)
+                            .lineSpacing(2)
+                            .frame(maxWidth: 315)
+                    }
+                    .padding(.top, 26)
 
-                    VStack(spacing: 8) {
+                    VStack(spacing: 10) {
                         placementTip(num: 1, title: "Far from your bed", subtitle: "At least a few steps away.")
                         placementTip(num: 2, title: "Eye level or lower", subtitle: "Easy to tap with your phone.")
                         placementTip(num: 3, title: "Smooth, flat surface", subtitle: "Avoid metal — it weakens the signal.")
                     }
                     .padding(.horizontal, UI.hPad)
+                    .padding(.top, 28)
+
+                    Color.clear.frame(height: 118)
                 }
+                .frame(maxWidth: .infinity)
             }
             .frame(maxHeight: .infinity)
 
-            // BOTTOM
             Button(actionTitle) {
                 if vm.registeredStickerID == nil {
                     vm.startNFCRegistration { onSave(alarm) }
@@ -890,9 +852,81 @@ private struct CreateAlarmFlow: View {
             }
             .buttonStyle(PillButtonStyle(primary: true))
             .disabled(vm.isNFCScanning)
-            .padding(.horizontal, UI.hPad).padding(.bottom, UI.bottomInset).padding(.top, 12)
+            .padding(.horizontal, UI.hPad)
+            .padding(.top, 14)
+            .padding(.bottom, UI.bottomInset)
+            .background(footerFade)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private enum HeaderAction {
+        case empty
+        case back(() -> Void)
+        case text(String, () -> Void)
+    }
+
+    private func topHeader(title: String, left: HeaderAction, right: HeaderAction) -> some View {
+        ZStack {
+            Text(title)
+                .font(.system(size: title.hasPrefix("STEP") ? 13 : 18, weight: .semibold))
+                .tracking(title.hasPrefix("STEP") ? 1.4 : 0)
+                .foregroundStyle(title.hasPrefix("STEP") ? AppTheme.textDark.opacity(0.62) : AppTheme.textDark)
+                .frame(maxWidth: .infinity)
+
+            HStack {
+                headerButton(left, alignment: .leading)
+                Spacer()
+                headerButton(right, alignment: .trailing)
+            }
+        }
+        .frame(height: 44)
+        .padding(.top, 10)
+        .padding(.horizontal, UI.hPad)
+        .padding(.bottom, 6)
+    }
+
+    @ViewBuilder
+    private func headerButton(_ action: HeaderAction, alignment: Alignment) -> some View {
+        switch action {
+        case .empty:
+            Color.clear.frame(width: 86, height: 44)
+        case .back(let handler):
+            Button(action: handler) {
+                Label("Back", systemImage: "chevron.left")
+                    .labelStyle(.titleAndIcon)
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(AppTheme.textDark.opacity(0.58))
+                    .frame(width: 86, height: 44, alignment: alignment)
+            }
+            .buttonStyle(.plain)
+        case .text(let title, let handler):
+            Button(title, action: handler)
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(AppTheme.accent)
+                .frame(width: 86, height: 44, alignment: alignment)
+        }
+    }
+
+    private var footerFade: some View {
+        LinearGradient(
+            colors: [
+                Color(red: 0.11, green: 0.17, blue: 0.33).opacity(0.0),
+                Color(red: 0.11, green: 0.17, blue: 0.33).opacity(0.78)
+            ],
+            startPoint: .top,
+            endPoint: .bottom
+        )
+        .ignoresSafeArea(edges: .bottom)
+        .allowsHitTesting(false)
+    }
+
+    private func bottomBar<Content: View>(@ViewBuilder content: () -> Content) -> some View {
+        content()
+            .padding(.horizontal, UI.hPad)
+            .padding(.top, 14)
+            .padding(.bottom, UI.bottomInset)
+            .background(footerFade)
     }
 
     private var actionTitle: String {
@@ -926,6 +960,7 @@ private struct CreateAlarmFlow: View {
 
 private struct ProfileScreen: View {
     @EnvironmentObject private var vm: AlarmAppViewModel
+    private let testStreaks = [0, 3, 7, 14, 21, 30, 50]
 
     var body: some View {
         ScrollView {
@@ -947,9 +982,11 @@ private struct ProfileScreen: View {
 
                 tierCard.padding(.horizontal, UI.hPad).padding(.top, 22)
 
-                growthLadder.padding(.top, 22)
+                streakTester.padding(.horizontal, UI.hPad).padding(.top, 16)
 
-                statsGrid.padding(.horizontal, UI.hPad).padding(.top, 22)
+                growthLadder.padding(.top, 20)
+
+                statsGrid.padding(.horizontal, UI.hPad).padding(.top, 20)
 
                 Spacer().frame(height: UI.tabBarSpace)
             }
@@ -1083,10 +1120,10 @@ private struct ProfileScreen: View {
 
     private var statsGrid: some View {
         let stats: [(String, String)] = [
-            ("ON TIME", "—"),
-            ("BEST STREAK", "\(vm.wakeStreak) days"),
-            ("AVG. WAKE", "—"),
-            ("SUNNY TAPS", "\(vm.wakeStreak)")
+            ("ON TIME", onTimeValue),
+            ("BEST STREAK", "\(max(vm.wakeStreak, 0)) days"),
+            ("AVG. WAKE", averageWakeValue),
+            ("SUNNY TAPS", "\(max(0, vm.wakeStreak * 3 + min(vm.wakeStreak, 12)))")
         ]
         return LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
             ForEach(stats, id: \.0) { stat in
@@ -1104,6 +1141,61 @@ private struct ProfileScreen: View {
                 }
             }
         }
+    }
+
+    private var streakTester: some View {
+        FrostCard(corner: 20) {
+            VStack(alignment: .leading, spacing: 14) {
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("STREAK LAB")
+                            .font(.system(size: 11, weight: .semibold))
+                            .tracking(1.2)
+                            .foregroundStyle(AppTheme.textMedium)
+                        Text("Preview Sunny's growth")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(AppTheme.textDark)
+                    }
+                    Spacer()
+                    Stepper("", value: $vm.wakeStreak, in: 0...75)
+                        .labelsHidden()
+                }
+
+                FlowLayout(spacing: 7) {
+                    ForEach(testStreaks, id: \.self) { streak in
+                        let active = vm.wakeStreak == streak
+                        Button {
+                            withAnimation(.spring(duration: 0.35, bounce: 0.18)) {
+                                vm.wakeStreak = streak
+                            }
+                        } label: {
+                            Text("\(streak)d")
+                                .font(.system(size: 13, weight: .semibold))
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 8)
+                                .foregroundStyle(active ? .white : AppTheme.textDark)
+                                .background(
+                                    Capsule().fill(active ? AnyShapeStyle(AppTheme.chipGradient) : AnyShapeStyle(.white.opacity(0.58)))
+                                )
+                                .overlay(Capsule().strokeBorder(active ? .clear : AppTheme.textDark.opacity(0.08), lineWidth: 1))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+            .padding(16)
+        }
+    }
+
+    private var onTimeValue: String {
+        guard vm.wakeStreak > 0 else { return "0%" }
+        return "\(min(99, 78 + vm.wakeStreak / 2))%"
+    }
+
+    private var averageWakeValue: String {
+        guard vm.wakeStreak > 0 else { return "—" }
+        let minutesAfterSeven = max(0, 42 - min(vm.wakeStreak, 36))
+        return "7:\(String(format: "%02d", minutesAfterSeven)) AM"
     }
 }
 
