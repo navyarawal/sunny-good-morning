@@ -6,12 +6,12 @@
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
+	<key>CFBundleIconName</key>
+	<string>AppIcon</string>
 	<key>CFBundleIdentifier</key>
 	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
-	<key>CFBundleIconName</key>
-	<string>AppIcon</string>
 	<key>CFBundleName</key>
 	<string>$(PRODUCT_NAME)</string>
 	<key>CFBundlePackageType</key>
@@ -23,7 +23,7 @@
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>NFCReaderUsageDescription</key>
-	<string>Sunny uses scanning to confirm you are up and near your saved wake-up spot.</string>
+	<string>Sunny uses NFC to read your sticker so you have to get out of bed to dismiss the alarm.</string>
 	<key>NSAlarmKitUsageDescription</key>
 	<string>Sunny schedules wake-up alarms that can ring prominently until you open the app and tap your NFC sticker.</string>
 	<key>NSSupportsLiveActivities</key>
