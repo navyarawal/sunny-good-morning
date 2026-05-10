@@ -84,7 +84,7 @@ struct AlarmItem: Identifiable, Codable {
     var repeatDays: Set<RepeatDay> = [.mon, .tue, .wed, .thu, .fri]
     var checkInIntervalMinutes: Int = 5
     var checkInRounds: Int = 2
-    var volume: Float = 0.8
+    var volume: Float = 1.0
     var ringtoneName: String = "Classic"
     var label: String = ""
 

@@ -36,7 +36,6 @@ final class SystemAlarmScheduler {
     }
 
     func cancel(id: UUID) {
-        guard Self.isSystemAlarmKitEnabled else { return }
         #if canImport(AlarmKit)
         if #available(iOS 26.0, *) {
             SystemAlarmKitBackend.shared.cancel(id: id)
@@ -45,7 +44,6 @@ final class SystemAlarmScheduler {
     }
 
     func stop(id: UUID) {
-        guard Self.isSystemAlarmKitEnabled else { return }
         #if canImport(AlarmKit)
         if #available(iOS 26.0, *) {
             SystemAlarmKitBackend.shared.stop(id: id)

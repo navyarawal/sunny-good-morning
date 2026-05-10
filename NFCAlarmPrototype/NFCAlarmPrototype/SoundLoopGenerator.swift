@@ -9,13 +9,14 @@ enum SoundLoopGenerator {
 
     private static let targetDuration: Double = 29.0  // iOS hard cap is 30; leave headroom
     private static let minAcceptableDuration: Double = 28.0
+    private static let maxAcceptableDuration: Double = 29.5
 
     static func ensureLoops(ringtoneNames: [String]) {
         guard let dir = soundsDirectory() else { return }
         for name in ringtoneNames {
             let lower = name.lowercased()
             let dst = dir.appendingPathComponent("rise_\(lower).wav")
-            if existsAndLongEnough(dst) { continue }
+            if existsAndUsableDuration(dst) { continue }
             guard let src = Bundle.main.url(forResource: "rise_\(lower)", withExtension: "wav") else { continue }
             try? buildLoop(from: src, to: dst)
         }
@@ -23,11 +24,11 @@ enum SoundLoopGenerator {
 
     // MARK: - Internals
 
-    private static func existsAndLongEnough(_ url: URL) -> Bool {
+    private static func existsAndUsableDuration(_ url: URL) -> Bool {
         guard FileManager.default.fileExists(atPath: url.path),
               let file = try? AVAudioFile(forReading: url) else { return false }
         let dur = Double(file.length) / file.processingFormat.sampleRate
-        return dur >= minAcceptableDuration
+        return dur >= minAcceptableDuration && dur <= maxAcceptableDuration
     }
 
     private static func soundsDirectory() -> URL? {

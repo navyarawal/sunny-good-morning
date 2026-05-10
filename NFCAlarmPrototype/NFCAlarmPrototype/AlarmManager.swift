@@ -280,7 +280,7 @@ final class AlarmManager: NSObject {
         guard let url = bundleURL(for: ringtone) else { return }
 
         do {
-            try AVAudioSession.sharedInstance().setCategory(.playback, mode: .default, options: [.duckOthers])
+            try AVAudioSession.sharedInstance().setCategory(.playback, mode: .default)
             try AVAudioSession.sharedInstance().setActive(true)
         } catch { return }
 
@@ -288,13 +288,12 @@ final class AlarmManager: NSObject {
 
         let target = max(0, min(volume, 1))
         player.numberOfLoops = -1
-        player.volume = target * 0.2  // start at 20%, ramp to full over 30s
+        player.volume = target
         player.prepareToPlay()
         player.play()
 
         audioPlayer = player
         isAlarmPlaying = true
-        rampVolume(on: player, to: target, over: 30)
     }
 
     func previewSound(volume: Float = 0.8, ringtone: String = "Classic") {
@@ -403,9 +402,10 @@ extension AlarmManager: UNUserNotificationCenterDelegate {
                     self?.startLiveActivity(alarmID: alarmID, ringtone: ringtone)
                 }
             }
-            // First chain notification: in-app loop takes over (suppress notif sound)
-            // Later chain notifications: silently — audio is already looping
-            handler([])
+            // Keep notification sound as a backup even in foreground. The
+            // in-app AVAudioPlayer should take over, but if audio fails to
+            // start for any reason, the notification still makes noise.
+            handler([.banner, .sound])
         } else {
             handler([.banner, .sound])
         }
