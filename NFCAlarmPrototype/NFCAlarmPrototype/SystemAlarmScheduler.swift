@@ -91,7 +91,10 @@ private struct OpenSunnyAlarmIntent: LiveActivityIntent {
     }
 
     func perform() async throws -> some IntentResult {
-        .result()
+        if !alarmID.isEmpty {
+            UserDefaults.standard.set(alarmID, forKey: "alarmKitOpenedAlarmID")
+        }
+        return .result()
     }
 }
 
@@ -129,9 +132,9 @@ private final class SystemAlarmKitBackend {
 
             typealias Configuration = AlarmKit.AlarmManager.AlarmConfiguration<SunnyAlarmMetadata>
 
-            let title = alarm.label.isEmpty ? "Find Sunny to stop the alarm" : "\(alarm.label): find Sunny"
+            let title = alarm.label.isEmpty ? "Rise & Tap! ☀️" : "\(alarm.label) ☀️"
             let findSunnyButton = AlarmButton(
-                text: "Find Sunny",
+                text: "Open Sunny",
                 textColor: .white,
                 systemImageName: "sun.max.fill"
             )

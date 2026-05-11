@@ -191,12 +191,39 @@ final class AlarmAppViewModel: ObservableObject {
         let active = alarms.filter { $0.isEnabled }
         guard !active.isEmpty else { return }
         alarmManager.startBackgroundMode(alarms: active)
+        // Start Live Activities now while we're guaranteed to be running.
+        // The DispatchWorkItem path also starts them when the alarm fires,
+        // but if the app is suspended before that, this ensures they appear.
+        if #available(iOS 16.2, *) {
+            for alarm in active {
+                LiveActivityController.shared.start(
+                    alarmID: alarm.id.uuidString,
+                    label: alarm.label.isEmpty ? "Good morning!" : alarm.label,
+                    ringtone: alarm.ringtoneName
+                )
+            }
+        }
     }
 
     func appDidBecomeActive() {
         // Cancel background timers — foreground handles alarms via willPresent delegate
         alarmManager.stopBackgroundMode()
         resolveExpiredSecondChanceIfNeeded()
+
+        // AlarmKit intent (Stop or Open Sunny button) sets this key before opening the app.
+        // Re-trigger ringing here so the alarm screen shows and audio restarts regardless
+        // of whether the app was in background or force-quit when AlarmKit fired.
+        if let pendingID = UserDefaults.standard.string(forKey: "alarmKitOpenedAlarmID") {
+            UserDefaults.standard.removeObject(forKey: "alarmKitOpenedAlarmID")
+            triggerAlarmRinging(alarmID: pendingID)
+            return
+        }
+
+        // If alarm was already ringing (app was in background), audio may have been
+        // interrupted by the system alarm sound — restart it.
+        if route == .alarmRinging {
+            resumeAlarmAudio()
+        }
     }
 
     // MARK: Persistence
@@ -332,7 +359,7 @@ final class AlarmAppViewModel: ObservableObject {
     func startNFCScanForDismissal() {
         nfcError = nil
         isNFCScanning = true
-        nfcManager.validateTagForDismissal { [weak self] matched in
+        nfcManager.validateTag { [weak self] matched in
             guard let self else { return }
             self.isNFCScanning = false
             if matched {
@@ -381,7 +408,7 @@ final class AlarmAppViewModel: ObservableObject {
 
         nfcError = nil
         isNFCScanning = true
-        nfcManager.validateTagForDismissal { [weak self] matched in
+        nfcManager.validateTag { [weak self] matched in
             guard let self else { return }
             self.isNFCScanning = false
             if matched {

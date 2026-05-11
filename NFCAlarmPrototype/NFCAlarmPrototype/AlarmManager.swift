@@ -26,6 +26,11 @@ final class AlarmManager: NSObject {
     private var alarmTriggers: [String: DispatchWorkItem] = [:]
     private let systemAlarmScheduler = SystemAlarmScheduler()
 
+    // Saved so we can restart after an audio-session interruption or volume-button stop
+    private var activeRingtone = "Classic"
+    private var activeVolume: Float = 0.8
+    private var watchdogTimer: Timer?
+
     var onAlarmFired: ((String) -> Void)?
 
     override init() {
@@ -40,6 +45,7 @@ final class AlarmManager: NSObject {
                 userInfo: ["alarmID": alarmID]
             )
         }
+        registerAudioSessionObservers()
     }
 
     // MARK: - Permissions
@@ -276,6 +282,8 @@ final class AlarmManager: NSObject {
     // MARK: - In-App Audio (loops loud while app is alive — bypasses mute switch)
 
     func startAlarmAudio(volume: Float = 0.8, ringtone: String = "Classic") {
+        activeVolume = volume
+        activeRingtone = ringtone
         guard !isAlarmPlaying else { return }
         guard let url = bundleURL(for: ringtone) else { return }
 
@@ -294,6 +302,7 @@ final class AlarmManager: NSObject {
 
         audioPlayer = player
         isAlarmPlaying = true
+        startWatchdog()
     }
 
     func previewSound(volume: Float = 0.8, ringtone: String = "Classic") {
@@ -325,6 +334,8 @@ final class AlarmManager: NSObject {
     }
 
     func stopAlarmAudio() {
+        watchdogTimer?.invalidate()
+        watchdogTimer = nil
         rampTimer?.invalidate()
         rampTimer = nil
         audioPlayer?.stop()
@@ -332,6 +343,69 @@ final class AlarmManager: NSObject {
         isAlarmPlaying = false
         if keepAlivePlayer == nil {
             try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+        }
+    }
+
+    private func startWatchdog() {
+        watchdogTimer?.invalidate()
+        // Schedule on main run loop — active while background audio session is held
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.watchdogTimer = Timer.scheduledTimer(withTimeInterval: 1.5, repeats: true) { [weak self] _ in
+                guard let self, self.isAlarmPlaying else { return }
+                guard self.audioPlayer?.isPlaying == false else { return }
+                // Audio stopped unexpectedly (volume button, interruption, etc.) — restart it
+                try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .default)
+                try? AVAudioSession.sharedInstance().setActive(true)
+                if let player = self.audioPlayer {
+                    player.play()
+                } else {
+                    self.isAlarmPlaying = false
+                    self.startAlarmAudio(volume: self.activeVolume, ringtone: self.activeRingtone)
+                }
+            }
+        }
+    }
+
+    // MARK: - Audio session interruption recovery
+
+    private func registerAudioSessionObservers() {
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleAudioInterruption),
+            name: AVAudioSession.interruptionNotification,
+            object: AVAudioSession.sharedInstance()
+        )
+    }
+
+    @objc private func handleAudioInterruption(_ notification: Notification) {
+        guard
+            let typeValue = notification.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt,
+            let type = AVAudioSession.InterruptionType(rawValue: typeValue),
+            type == .ended
+        else { return }
+
+        let options = (notification.userInfo?[AVAudioSessionInterruptionOptionKey] as? UInt)
+            .map { AVAudioSession.InterruptionOptions(rawValue: $0) } ?? []
+        guard options.contains(.shouldResume) else { return }
+
+        try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .default)
+        try? AVAudioSession.sharedInstance().setActive(true)
+
+        // Resume keep-alive so iOS doesn't suspend us again
+        if keepAlivePlayer != nil {
+            keepAlivePlayer?.play()
+        }
+
+        // Resume or restart alarm audio
+        if isAlarmPlaying {
+            if audioPlayer?.isPlaying == false {
+                // Player was stopped, not just paused — rebuild it
+                isAlarmPlaying = false
+                startAlarmAudio(volume: activeVolume, ringtone: activeRingtone)
+            } else {
+                audioPlayer?.play()
+            }
         }
     }
 
@@ -353,7 +427,8 @@ final class AlarmManager: NSObject {
     // MARK: - Bundled sound resolution
 
     private func bundleURL(for ringtone: String) -> URL? {
-        Bundle.main.url(forResource: "rise_\(ringtone.lowercased())", withExtension: "wav")
+        Bundle.main.url(forResource: "rise_\(ringtone.lowercased())", withExtension: "wav", subdirectory: "Sounds")
+        ?? Bundle.main.url(forResource: "rise_\(ringtone.lowercased())", withExtension: "wav")
     }
 
     private func notificationSoundFileName(for ringtone: String) -> String {
