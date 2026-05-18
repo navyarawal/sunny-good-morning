@@ -10,9 +10,9 @@
 		A67B32972FB14BD5002FF25D /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A67B32582FB14AF6002FF25D /* WidgetKit.framework */; };
 		A67B32982FB14BD5002FF25D /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A67B325A2FB14AF7002FF25D /* SwiftUI.framework */; };
 		A67B32A52FB14BD7002FF25D /* AlarmWidgetExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = A67B32962FB14BD5002FF25D /* AlarmWidgetExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
-		B1CC3B042FB14BD5002FF25D /* AlarmActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1CC3B012FB14BD5002FF25D /* AlarmActivityAttributes.swift */; };
-		B1CC3B052FB14BD5002FF25D /* AlarmLiveActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1CC3B022FB14BD5002FF25D /* AlarmLiveActivity.swift */; };
-		B1CC3B062FB14BD5002FF25D /* AlarmWidgetBundle.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1CC3B032FB14BD5002FF25D /* AlarmWidgetBundle.swift */; };
+		B1CC3B042FB14BD5002FF25D /* AlarmWidget/AlarmActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1CC3B012FB14BD5002FF25D /* AlarmWidget/AlarmActivityAttributes.swift */; };
+		B1CC3B052FB14BD5002FF25D /* AlarmWidget/AlarmLiveActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1CC3B022FB14BD5002FF25D /* AlarmWidget/AlarmLiveActivity.swift */; };
+		B1CC3B062FB14BD5002FF25D /* AlarmWidget/AlarmWidgetBundle.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1CC3B032FB14BD5002FF25D /* AlarmWidget/AlarmWidgetBundle.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -44,9 +44,9 @@
 		A67B32582FB14AF6002FF25D /* WidgetKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = System/Library/Frameworks/WidgetKit.framework; sourceTree = SDKROOT; };
 		A67B325A2FB14AF7002FF25D /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
 		A67B32962FB14BD5002FF25D /* AlarmWidgetExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = AlarmWidgetExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
-		B1CC3B012FB14BD5002FF25D /* AlarmActivityAttributes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AlarmWidget/AlarmActivityAttributes.swift; sourceTree = SOURCE_ROOT; };
-		B1CC3B022FB14BD5002FF25D /* AlarmLiveActivity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AlarmWidget/AlarmLiveActivity.swift; sourceTree = SOURCE_ROOT; };
-		B1CC3B032FB14BD5002FF25D /* AlarmWidgetBundle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AlarmWidget/AlarmWidgetBundle.swift; sourceTree = SOURCE_ROOT; };
+		B1CC3B012FB14BD5002FF25D /* AlarmWidget/AlarmActivityAttributes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AlarmWidget/AlarmActivityAttributes.swift; sourceTree = SOURCE_ROOT; };
+		B1CC3B022FB14BD5002FF25D /* AlarmWidget/AlarmLiveActivity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AlarmWidget/AlarmLiveActivity.swift; sourceTree = SOURCE_ROOT; };
+		B1CC3B032FB14BD5002FF25D /* AlarmWidget/AlarmWidgetBundle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AlarmWidget/AlarmWidgetBundle.swift; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -112,6 +112,7 @@
 				A67B32992FB14BD5002FF25D /* AlarmWidget */,
 				A67B32572FB14AF6002FF25D /* Frameworks */,
 				A60FC8AA2F9DE11700D1F3F5 /* Products */,
+				A669571A2FBBCB690037CF73 /* Recovered References */,
 			);
 			sourceTree = "<group>";
 		};
@@ -122,6 +123,16 @@
 				A67B32962FB14BD5002FF25D /* AlarmWidgetExtension.appex */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		A669571A2FBBCB690037CF73 /* Recovered References */ = {
+			isa = PBXGroup;
+			children = (
+				B1CC3B012FB14BD5002FF25D /* AlarmWidget/AlarmActivityAttributes.swift */,
+				B1CC3B022FB14BD5002FF25D /* AlarmWidget/AlarmLiveActivity.swift */,
+				B1CC3B032FB14BD5002FF25D /* AlarmWidget/AlarmWidgetBundle.swift */,
+			);
+			name = "Recovered References";
 			sourceTree = "<group>";
 		};
 		A67B32572FB14AF6002FF25D /* Frameworks */ = {
@@ -205,7 +216,7 @@
 					};
 				};
 			};
-			buildConfigurationList = A60FC8A42F9DE11700D1F3F5 /* Build configuration list for PBXProject "NFCAlarmPrototype" */;
+			buildConfigurationList = A60FC8A42F9DE11700D1F3F5 /* Build configuration list for PBXProject "Sunny" */;
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
 			knownRegions = (
@@ -254,9 +265,9 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				B1CC3B042FB14BD5002FF25D /* AlarmActivityAttributes.swift in Sources */,
-				B1CC3B052FB14BD5002FF25D /* AlarmLiveActivity.swift in Sources */,
-				B1CC3B062FB14BD5002FF25D /* AlarmWidgetBundle.swift in Sources */,
+				B1CC3B042FB14BD5002FF25D /* AlarmWidget/AlarmActivityAttributes.swift in Sources */,
+				B1CC3B052FB14BD5002FF25D /* AlarmWidget/AlarmLiveActivity.swift in Sources */,
+				B1CC3B062FB14BD5002FF25D /* AlarmWidget/AlarmWidgetBundle.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -531,7 +542,7 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		A60FC8A42F9DE11700D1F3F5 /* Build configuration list for PBXProject "NFCAlarmPrototype" */ = {
+		A60FC8A42F9DE11700D1F3F5 /* Build configuration list for PBXProject "Sunny" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				A60FC8B22F9DE11C00D1F3F5 /* Debug */,

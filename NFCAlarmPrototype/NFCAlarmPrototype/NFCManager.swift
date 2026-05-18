@@ -1,153 +1,172 @@
-@preconcurrency import CoreNFC
+import CoreNFC
 import Foundation
-
-enum NFCScanPurpose { case register, validate }
 
 final class NFCManager: NSObject {
 
     private let stickerKey = "registeredNFCTagID"
-    private var session: NFCTagReaderSession?
 
-    // nonisolated(unsafe) lets delegate callbacks read/write these
-    // without actor-hop; safe because session callbacks all run on .main
-    nonisolated(unsafe) private var scanPurpose: NFCScanPurpose = .register
-    nonisolated(unsafe) private var completion: ((Result<String, Error>) -> Void)?
+    nonisolated(unsafe) private var session: NFCNDEFReaderSession?
+    nonisolated(unsafe) private var purpose: Purpose = .register
+    nonisolated(unsafe) private var onResult: ((Result<String, Error>) -> Void)?
+
+    private enum Purpose { case register, validate }
+
+    // MARK: - Public API
 
     var registeredTagID: String? {
         UserDefaults.standard.string(forKey: stickerKey)
     }
 
     func registerTag(completion: @escaping (Result<String, Error>) -> Void) {
-        beginSession(
-            purpose: .register,
-            message: "Hold your phone near Sunny's sticker.",
-            completion: completion
-        )
+        start(purpose: .register, message: "Hold your phone near your Sunny sticker.", completion: completion)
     }
 
-    func validateTagForDismissal(completion: @escaping (Bool) -> Void) {
-        let key = stickerKey
-        beginSession(
-            purpose: .validate,
-            message: "Bring your phone to Sunny's sticker."
-        ) { result in
+    func validateTag(completion: @escaping (Bool) -> Void) {
+        start(purpose: .validate, message: "Tap your phone to Sunny's sticker.") { [weak self] result in
             switch result {
             case .success(let id):
-                completion(id == UserDefaults.standard.string(forKey: key))
+                completion(id == self?.registeredTagID)
             case .failure:
                 completion(false)
             }
         }
     }
 
-    private func beginSession(
-        purpose: NFCScanPurpose,
-        message: String,
-        completion: @escaping (Result<String, Error>) -> Void
-    ) {
-        guard NFCTagReaderSession.readingAvailable else {
+    // MARK: - Private
+
+    private func start(purpose: Purpose, message: String, completion: @escaping (Result<String, Error>) -> Void) {
+        guard NFCNDEFReaderSession.readingAvailable else {
             completion(.failure(NFCError.unavailable))
             return
         }
-        self.scanPurpose = purpose
-        self.completion = completion
-        session = NFCTagReaderSession(
-            pollingOption: [.iso14443, .iso15693, .iso18092],
-            delegate: self,
-            queue: .main
-        )
+        self.purpose = purpose
+        self.onResult = completion
+        session = NFCNDEFReaderSession(delegate: self, queue: .main, invalidateAfterFirstRead: false)
         session?.alertMessage = message
         session?.begin()
     }
 
+    private func finish(with result: Result<String, Error>) {
+        DispatchQueue.main.async { [weak self] in
+            self?.onResult?(result)
+            self?.onResult = nil
+        }
+    }
+
     enum NFCError: LocalizedError {
-        case unavailable, noData
+        case unavailable, unreadable, writeFailed
 
         var errorDescription: String? {
             switch self {
             case .unavailable:  return "NFC is not available on this device."
-            case .noData:       return "Sunny could not read this sticker."
+            case .unreadable:   return "Could not read the sticker. Try again."
+            case .writeFailed:  return "Could not write to sticker. Try again."
             }
         }
     }
 }
 
-// MARK: - Delegate
+// MARK: - NFCNDEFReaderSessionDelegate
 
-extension NFCManager: NFCTagReaderSessionDelegate {
+extension NFCManager: NFCNDEFReaderSessionDelegate {
 
-    nonisolated func tagReaderSessionDidBecomeActive(_ session: NFCTagReaderSession) {}
+    func readerSessionDidBecomeActive(_ session: NFCNDEFReaderSession) {}
 
-    nonisolated func tagReaderSession(_ session: NFCTagReaderSession, didDetect tags: [NFCTag]) {
-        guard let tag = tags.first else {
-            session.invalidate(errorMessage: "No tag detected.")
-            return
-        }
-        let purpose = scanPurpose
-        let key = stickerKey
-
-        session.connect(to: tag) { [weak self] error in
-            if error != nil {
-                session.invalidate(errorMessage: "Connection failed.")
-                Task { @MainActor [weak self] in
-                    self?.completion?(.failure(NFCError.unavailable))
-                    self?.completion = nil
-                }
-                return
-            }
-
-            guard let tagID = Self.identifier(for: tag) else {
-                session.invalidate(errorMessage: "Sunny could not read this sticker.")
-                Task { @MainActor [weak self] in
-                    self?.completion?(.failure(NFCError.noData))
-                    self?.completion = nil
-                }
-                return
-            }
-
-            switch purpose {
-            case .register:
-                UserDefaults.standard.set(tagID, forKey: key)
-                session.alertMessage = "Found Sunny's spot!"
-                session.invalidate()
-                Task { @MainActor [weak self] in
-                    self?.completion?(.success(tagID))
-                    self?.completion = nil
-                }
-            case .validate:
-                session.invalidate()
-                Task { @MainActor [weak self] in
-                    self?.completion?(.success(tagID))
-                    self?.completion = nil
-                }
-            }
-        }
-    }
-
-    private nonisolated static func identifier(for tag: NFCTag) -> String? {
-        let data: Data
-        switch tag {
-        case .feliCa(let detectedTag):
-            data = detectedTag.currentIDm
-        case .iso15693(let detectedTag):
-            data = detectedTag.identifier
-        case .iso7816(let detectedTag):
-            data = detectedTag.identifier
-        case .miFare(let detectedTag):
-            data = detectedTag.identifier
-        @unknown default:
-            return nil
-        }
-
-        guard !data.isEmpty else { return nil }
-        return data.map { String(format: "%02x", $0) }.joined()
-    }
-    nonisolated func tagReaderSession(_ session: NFCTagReaderSession, didInvalidateWithError error: Error) {
+    func readerSession(_ session: NFCNDEFReaderSession, didInvalidateWithError error: Error) {
         if let err = error as? NFCReaderError,
            err.code == .readerSessionInvalidationErrorUserCanceled { return }
-        Task { @MainActor [weak self] in
-            self?.completion?(.failure(error))
-            self?.completion = nil
+        if let err = error as? NFCReaderError,
+           err.code == .readerSessionInvalidationErrorFirstNDEFTagRead { return }
+        finish(with: .failure(error))
+    }
+
+    func readerSession(_ session: NFCNDEFReaderSession, didDetectNDEFs messages: [NFCNDEFMessage]) {
+        // Not used — we use tag-based detection below
+    }
+
+    func readerSession(_ session: NFCNDEFReaderSession, didDetect tags: [NFCNDEFTag]) {
+        guard let tag = tags.first else {
+            session.invalidate(errorMessage: "No tag found. Try again.")
+            finish(with: .failure(NFCError.unreadable))
+            return
+        }
+
+        session.connect(to: tag) { [weak self] error in
+            guard let self else { return }
+
+            if error != nil {
+                session.invalidate(errorMessage: "Connection failed. Try again.")
+                self.finish(with: .failure(NFCError.unreadable))
+                return
+            }
+
+            switch self.purpose {
+            case .register:
+                self.writeNewID(to: tag, session: session)
+            case .validate:
+                self.readID(from: tag, session: session)
+            }
+        }
+    }
+
+    // MARK: - Write a UUID onto the tag (register)
+
+    private func writeNewID(to tag: NFCNDEFTag, session: NFCNDEFReaderSession) {
+        let uuid = UUID().uuidString
+        let payload = NFCNDEFPayload(
+            format: .unknown,
+            type: Data(),
+            identifier: Data(),
+            payload: Data(uuid.utf8)
+        )
+        let message = NFCNDEFMessage(records: [payload])
+
+        tag.queryNDEFStatus { [weak self] status, _, error in
+            guard let self else { return }
+
+            if error != nil || status == .notSupported {
+                session.invalidate(errorMessage: "This sticker is not supported.")
+                self.finish(with: .failure(NFCError.writeFailed))
+                return
+            }
+
+            tag.writeNDEF(message) { [weak self] writeError in
+                guard let self else { return }
+                if writeError != nil {
+                    session.invalidate(errorMessage: "Write failed. Sticker may be locked.")
+                    self.finish(with: .failure(NFCError.writeFailed))
+                    return
+                }
+                UserDefaults.standard.set(uuid, forKey: self.stickerKey)
+                session.alertMessage = "Sunny's sticker is set!"
+                session.invalidate()
+                self.finish(with: .success(uuid))
+            }
+        }
+    }
+
+    // MARK: - Read UUID from tag (validate)
+
+    private func readID(from tag: NFCNDEFTag, session: NFCNDEFReaderSession) {
+        tag.readNDEF { [weak self] message, error in
+            guard let self else { return }
+
+            if error != nil || message == nil {
+                session.invalidate(errorMessage: "Could not read sticker.")
+                self.finish(with: .failure(NFCError.unreadable))
+                return
+            }
+
+            guard let record = message?.records.first,
+                  let id = String(data: record.payload, encoding: .utf8),
+                  !id.isEmpty else {
+                session.invalidate(errorMessage: "No data on sticker.")
+                self.finish(with: .failure(NFCError.unreadable))
+                return
+            }
+
+            session.invalidate()
+            self.finish(with: .success(id))
         }
     }
 }

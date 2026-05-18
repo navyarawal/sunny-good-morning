@@ -17,7 +17,8 @@ enum SoundLoopGenerator {
             let lower = name.lowercased()
             let dst = dir.appendingPathComponent("rise_\(lower).wav")
             if existsAndUsableDuration(dst) { continue }
-            guard let src = Bundle.main.url(forResource: "rise_\(lower)", withExtension: "wav") else { continue }
+            guard let src = Bundle.main.url(forResource: "rise_\(lower)", withExtension: "wav", subdirectory: "Sounds")
+                         ?? Bundle.main.url(forResource: "rise_\(lower)", withExtension: "wav") else { continue }
             try? buildLoop(from: src, to: dst)
         }
     }
