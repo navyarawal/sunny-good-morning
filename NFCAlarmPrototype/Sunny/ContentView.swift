@@ -15,9 +15,6 @@ struct ContentView: View {
             case .alarmRinging:
                 AlarmRingingScreen()
                     .transition(.opacity)
-            case .checkIn:
-                CheckInScreen()
-                    .transition(.move(edge: .bottom))
             case .levelUp:
                 LevelUpScreen()
                     .transition(.scale(scale: 0.88).combined(with: .opacity))
@@ -262,11 +259,6 @@ private struct MainTabsView: View {
             }
 
             VStack {
-                if vm.hasActiveSecondChance {
-                    SecondChanceBanner()
-                        .padding(.horizontal, UI.hPad)
-                        .padding(.top, UI.topInset)
-                }
                 Spacer()
                 if tab != .create {
                     FloatingTabBar(active: tab) { tab = $0 }
@@ -286,49 +278,6 @@ private struct MainTabsView: View {
                 }
             )
         }
-    }
-}
-
-private struct SecondChanceBanner: View {
-    @EnvironmentObject private var vm: AlarmAppViewModel
-
-    var body: some View {
-        FrostCard(corner: 20) {
-            VStack(alignment: .leading, spacing: 12) {
-                HStack(alignment: .top, spacing: 10) {
-                    Image(systemName: "sun.max.trianglebadge.exclamationmark.fill")
-                        .font(.system(size: 24, weight: .semibold))
-                        .foregroundStyle(AppTheme.accent)
-
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text("Second chance")
-                            .font(.system(size: 17, weight: .bold))
-                            .foregroundStyle(AppTheme.textDark)
-                        Text(secondChanceText)
-                            .font(.system(size: 13, weight: .medium))
-                            .foregroundStyle(AppTheme.textMedium)
-                            .lineSpacing(1)
-                    }
-                }
-
-                Button {
-                    vm.startNFCScanForSecondChance()
-                } label: {
-                    Label(vm.isNFCScanning ? "Scanning..." : "Scan Sunny now", systemImage: "wave.3.right.circle.fill")
-                        .font(.system(size: 15, weight: .semibold))
-                }
-                .buttonStyle(PillButtonStyle(primary: true))
-                .disabled(vm.isNFCScanning)
-            }
-            .padding(16)
-        }
-    }
-
-    private var secondChanceText: String {
-        guard let deadline = vm.secondChanceDeadline else {
-            return "Scan your sticker to recover this wake-up."
-        }
-        return "Emergency dismiss used. Scan by \(deadline.formatted(date: .omitted, time: .shortened)) to count this as on time."
     }
 }
 
@@ -628,7 +577,6 @@ private struct CreateAlarmFlow: View {
 
             switch step {
             case 1: detailsStep
-            case 2: checkInStep
             default: nfcPlacementStep
             }
         }
@@ -828,80 +776,11 @@ private struct CreateAlarmFlow: View {
         return weekdayOrder.compactMap { days.contains($0) ? $0.rawValue : nil }.joined(separator: ", ")
     }
 
-    // MARK: Step 2 — check-ins
-
-    private var checkInStep: some View {
-        VStack(spacing: 0) {
-            topHeader(title: "STEP 2 OF 3", left: .back { step = 1 }, right: .empty)
-
-            ScrollView(showsIndicators: false) {
-                VStack(spacing: 0) {
-                    SunMascotView(level: .seedling, mood: .happy, size: 96)
-                        .padding(.top, 20)
-
-                    VStack(spacing: 10) {
-                        Text("Wake-up check-ins")
-                            .font(.system(size: 32, weight: .bold))
-                            .foregroundStyle(AppTheme.textDark)
-                            .multilineTextAlignment(.center)
-
-                        Text("Sunny can ring again after you dismiss, so you're not back asleep two minutes later.")
-                            .font(.system(size: 16))
-                            .foregroundStyle(AppTheme.textMedium)
-                            .multilineTextAlignment(.center)
-                            .lineSpacing(2)
-                            .frame(maxWidth: 310)
-                    }
-                    .padding(.top, 22)
-
-                    FrostCard(corner: 22) {
-                        VStack(spacing: 0) {
-                            StepperRow(
-                                label: "Number of check-ins",
-                                value: alarm.checkInRounds,
-                                suffix: alarm.checkInRounds == 1 ? "check-in" : "check-ins",
-                                range: 1...6,
-                                onChange: { alarm.checkInRounds = $0 }
-                            )
-                            Divider().background(AppTheme.textDark.opacity(0.08)).padding(.vertical, 14)
-                            StepperRow(
-                                label: "Every",
-                                value: alarm.checkInIntervalMinutes,
-                                suffix: "minutes",
-                                range: 1...30,
-                                onChange: { alarm.checkInIntervalMinutes = $0 }
-                            )
-                        }
-                        .padding(18)
-                    }
-                    .padding(.top, 28)
-                    .padding(.horizontal, UI.hPad)
-
-                    Color.clear.frame(height: 118)
-                }
-                .frame(maxWidth: .infinity)
-            }
-            .frame(maxHeight: .infinity)
-
-            HStack(spacing: 12) {
-                Button("Skip") { step = 3 }
-                    .buttonStyle(PillButtonStyle(primary: false))
-                Button("Add check-ins") { step = 3 }
-                    .buttonStyle(PillButtonStyle(primary: true))
-            }
-            .padding(.horizontal, UI.hPad)
-            .padding(.top, 14)
-            .padding(.bottom, UI.bottomInset)
-            .background(footerFade)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
-
-    // MARK: Step 3 — NFC placement
+    // MARK: Step 2 — NFC placement
 
     private var nfcPlacementStep: some View {
         VStack(spacing: 0) {
-            topHeader(title: "STEP 3 OF 3", left: .back { step = 2 }, right: .text("Skip", { onSave(alarm) }))
+            topHeader(title: "STEP 2 OF 2", left: .back { step = 1 }, right: .text("Skip", { onSave(alarm) }))
 
             ScrollView(showsIndicators: false) {
                 VStack(spacing: 0) {
@@ -1305,95 +1184,129 @@ private struct AlarmRingingScreen: View {
         ZStack {
             AppTheme.alarmGradient.ignoresSafeArea()
 
-            VStack(spacing: 0) {
-                Spacer()
-
-                Text(Date.now.formatted(date: .omitted, time: .shortened))
-                    .font(.system(size: 64, weight: .bold))
-                    .foregroundStyle(.white)
-                    .scaleEffect(pulseScale)
-                    .onAppear {
-                        withAnimation(.easeInOut(duration: 0.6).repeatForever(autoreverses: true)) {
-                            pulseScale = 1.06
-                        }
-                    }
-
-                Text("Time to wake up!")
-                    .font(.system(size: 22, weight: .semibold))
-                    .foregroundStyle(.white.opacity(0.85))
-                    .padding(.top, 6)
-
-                Spacer()
-
-                SunMascotView(level: vm.sunLevel, mood: .excited, size: 160)
-
-                Text("Hold your phone to your Sunny sticker")
-                    .font(.system(size: 16, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.85))
-                    .multilineTextAlignment(.center)
-                    .padding(.top, 16)
-                    .padding(.horizontal, UI.hPad)
-
-                Spacer()
-
-                VStack(spacing: 10) {
-                    Button {
-                        vm.startNFCScanForDismissal()
-                    } label: {
-                        HStack(spacing: 10) {
-                            Image(systemName: "wave.3.right.circle.fill")
-                                .font(.system(size: 22))
-                            Text(vm.isNFCScanning ? "Scanning…" : "Scan NFC Sticker")
-                        }
-                    }
-                    .buttonStyle(PillButtonStyle(primary: false))
-                    .disabled(vm.isNFCScanning)
-
-                    if let err = vm.nfcError {
-                        Text(err)
-                            .font(.system(size: 13))
-                            .foregroundStyle(.white)
-                    }
-                }
-                .padding(.horizontal, UI.hPad)
-                .padding(.bottom, UI.bottomInset)
+            if vm.isEmergencyDismissActive {
+                emergencyDismissView
+            } else {
+                normalAlarmView
             }
         }
     }
-}
 
-private struct CheckInScreen: View {
-    @EnvironmentObject private var vm: AlarmAppViewModel
+    private var normalAlarmView: some View {
+        VStack(spacing: 0) {
+            Spacer()
 
-    var body: some View {
-        ZStack {
-            AppTheme.successGradient.ignoresSafeArea()
-            VStack(spacing: 0) {
-                Spacer()
-                SunMascotView(level: vm.sunLevel, mood: .happy, size: 150)
-                Text(vm.currentCheckInRound == 0 ? "Good tap!" : "Still standing?")
-                    .font(.system(size: 30, weight: .bold))
-                    .foregroundStyle(AppTheme.textDark)
-                    .padding(.top, 24)
+            Text(Date.now.formatted(date: .omitted, time: .shortened))
+                .font(.system(size: 64, weight: .bold))
+                .foregroundStyle(.white)
+                .scaleEffect(pulseScale)
+                .onAppear {
+                    withAnimation(.easeInOut(duration: 0.6).repeatForever(autoreverses: true)) {
+                        pulseScale = 1.06
+                    }
+                }
 
-                Text("Check-in \(vm.currentCheckInRound + 1) of \(vm.checkInRounds)")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(AppTheme.textMedium)
-                    .padding(.top, 6)
+            Text("Time to wake up!")
+                .font(.system(size: 22, weight: .semibold))
+                .foregroundStyle(.white.opacity(0.85))
+                .padding(.top, 6)
 
-                Text("Confirm you're actually up and moving.")
-                    .font(.system(size: 16))
-                    .foregroundStyle(AppTheme.textMedium)
-                    .padding(.top, 14)
-                    .padding(.horizontal, 32)
-                    .multilineTextAlignment(.center)
+            Spacer()
 
-                Spacer()
+            SunMascotView(level: vm.sunLevel, mood: .excited, size: 160)
 
-                Button("Yes, I'm up!") { vm.confirmAwake() }
-                    .buttonStyle(PillButtonStyle(primary: true))
-                    .padding(.horizontal, UI.hPad).padding(.bottom, UI.bottomInset)
+            Text("Hold your phone to your Sunny sticker")
+                .font(.system(size: 16, weight: .medium))
+                .foregroundStyle(.white.opacity(0.85))
+                .multilineTextAlignment(.center)
+                .padding(.top, 16)
+                .padding(.horizontal, UI.hPad)
+
+            Spacer()
+
+            VStack(spacing: 10) {
+                Button {
+                    vm.startNFCScanForDismissal()
+                } label: {
+                    HStack(spacing: 10) {
+                        Image(systemName: "wave.3.right.circle.fill")
+                            .font(.system(size: 22))
+                        Text(vm.isNFCScanning ? "Scanning…" : "Scan NFC Sticker")
+                    }
+                }
+                .buttonStyle(PillButtonStyle(primary: false))
+                .disabled(vm.isNFCScanning)
+
+                if let err = vm.nfcError {
+                    Text(err)
+                        .font(.system(size: 13))
+                        .foregroundStyle(.white)
+                }
+
+                Button("Can't scan? Tap to dismiss") {
+                    vm.beginEmergencyDismiss()
+                }
+                .font(.system(size: 14, weight: .medium))
+                .foregroundStyle(.white.opacity(0.6))
+                .padding(.top, 4)
             }
+            .padding(.horizontal, UI.hPad)
+            .padding(.bottom, UI.bottomInset)
+        }
+    }
+
+    private var emergencyDismissView: some View {
+        VStack(spacing: 0) {
+            Spacer().frame(height: UI.topInset + 28)
+
+            Text("Emergency Dismiss")
+                .font(.system(size: 30, weight: .bold))
+                .foregroundStyle(.white)
+
+            Text("Tap the highlighted button \(vm.emergencyTapsRemaining) more time\(vm.emergencyTapsRemaining == 1 ? "" : "s").")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(.white.opacity(0.82))
+                .multilineTextAlignment(.center)
+                .padding(.top, 8)
+                .padding(.horizontal, UI.hPad)
+
+            Spacer()
+
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 5), spacing: 8) {
+                ForEach(0..<25, id: \.self) { index in
+                    Button {
+                        if index == vm.emergencyGridPosition {
+                            vm.registerEmergencyTap()
+                        }
+                    } label: {
+                        ZStack {
+                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                .fill(.white.opacity(index == vm.emergencyGridPosition ? 0.95 : 0.18))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                        .strokeBorder(.white.opacity(0.35), lineWidth: 1)
+                                )
+                            if index == vm.emergencyGridPosition {
+                                Text("\(vm.emergencyTapsRemaining)")
+                                    .font(.system(size: 16, weight: .black))
+                                    .foregroundStyle(AppTheme.accentLow)
+                            }
+                        }
+                        .aspectRatio(1, contentMode: .fit)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal, UI.hPad)
+
+            Spacer()
+
+            Button("Back to NFC scan") {
+                vm.isEmergencyDismissActive = false
+            }
+            .buttonStyle(PillButtonStyle(primary: false))
+            .padding(.horizontal, UI.hPad)
+            .padding(.bottom, UI.bottomInset)
         }
     }
 }

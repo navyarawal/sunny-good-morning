@@ -16,8 +16,8 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "A60FC8A82F9DE11700D1F3F5"
-               BuildableName = "NFCAlarmPrototype.app"
-               BlueprintName = "NFCAlarmPrototype"
+               BuildableName = "Sunny.app"
+               BlueprintName = "Sunny"
                ReferencedContainer = "container:Sunny.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
@@ -46,8 +46,8 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "A60FC8A82F9DE11700D1F3F5"
-            BuildableName = "NFCAlarmPrototype.app"
-            BlueprintName = "NFCAlarmPrototype"
+            BuildableName = "Sunny.app"
+            BlueprintName = "Sunny"
             ReferencedContainer = "container:Sunny.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
@@ -63,8 +63,8 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "A60FC8A82F9DE11700D1F3F5"
-            BuildableName = "NFCAlarmPrototype.app"
-            BlueprintName = "NFCAlarmPrototype"
+            BuildableName = "Sunny.app"
+            BlueprintName = "Sunny"
             ReferencedContainer = "container:Sunny.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>

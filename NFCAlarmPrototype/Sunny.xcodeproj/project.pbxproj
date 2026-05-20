@@ -40,7 +40,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
-		A60FC8A92F9DE11700D1F3F5 /* NFCAlarmPrototype.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = NFCAlarmPrototype.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		A60FC8A92F9DE11700D1F3F5 /* Sunny.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Sunny.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A67B32582FB14AF6002FF25D /* WidgetKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = System/Library/Frameworks/WidgetKit.framework; sourceTree = SDKROOT; };
 		A67B325A2FB14AF7002FF25D /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
 		A67B32962FB14BD5002FF25D /* AlarmWidgetExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = AlarmWidgetExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -50,12 +50,12 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
-		A60FC8C12F9DE11700D1F3F5 /* Exceptions for "NFCAlarmPrototype" folder in "NFCAlarmPrototype" target */ = {
+		A60FC8C12F9DE11700D1F3F5 /* Exceptions for "Sunny" folder in "Sunny" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				Info.plist,
 			);
-			target = A60FC8A82F9DE11700D1F3F5 /* NFCAlarmPrototype */;
+			target = A60FC8A82F9DE11700D1F3F5 /* Sunny */;
 		};
 		A67B32A92FB14BD7002FF25D /* Exceptions for "AlarmWidget" folder in "AlarmWidgetExtension" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
@@ -67,12 +67,12 @@
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		A60FC8AB2F9DE11700D1F3F5 /* NFCAlarmPrototype */ = {
+		A60FC8AB2F9DE11700D1F3F5 /* Sunny */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
-				A60FC8C12F9DE11700D1F3F5 /* Exceptions for "NFCAlarmPrototype" folder in "NFCAlarmPrototype" target */,
+				A60FC8C12F9DE11700D1F3F5 /* Exceptions for "Sunny" folder in "Sunny" target */,
 			);
-			path = NFCAlarmPrototype;
+			path = Sunny;
 			sourceTree = "<group>";
 		};
 		A67B32992FB14BD5002FF25D /* AlarmWidget */ = {
@@ -108,7 +108,7 @@
 		A60FC8A02F9DE11700D1F3F5 = {
 			isa = PBXGroup;
 			children = (
-				A60FC8AB2F9DE11700D1F3F5 /* NFCAlarmPrototype */,
+				A60FC8AB2F9DE11700D1F3F5 /* Sunny */,
 				A67B32992FB14BD5002FF25D /* AlarmWidget */,
 				A67B32572FB14AF6002FF25D /* Frameworks */,
 				A60FC8AA2F9DE11700D1F3F5 /* Products */,
@@ -119,7 +119,7 @@
 		A60FC8AA2F9DE11700D1F3F5 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				A60FC8A92F9DE11700D1F3F5 /* NFCAlarmPrototype.app */,
+				A60FC8A92F9DE11700D1F3F5 /* Sunny.app */,
 				A67B32962FB14BD5002FF25D /* AlarmWidgetExtension.appex */,
 			);
 			name = Products;
@@ -147,9 +147,9 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		A60FC8A82F9DE11700D1F3F5 /* NFCAlarmPrototype */ = {
+		A60FC8A82F9DE11700D1F3F5 /* Sunny */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = A60FC8B42F9DE11C00D1F3F5 /* Build configuration list for PBXNativeTarget "NFCAlarmPrototype" */;
+			buildConfigurationList = A60FC8B42F9DE11C00D1F3F5 /* Build configuration list for PBXNativeTarget "Sunny" */;
 			buildPhases = (
 				A60FC8A52F9DE11700D1F3F5 /* Sources */,
 				A60FC8A62F9DE11700D1F3F5 /* Frameworks */,
@@ -162,13 +162,13 @@
 				A67B32A42FB14BD7002FF25D /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
-				A60FC8AB2F9DE11700D1F3F5 /* NFCAlarmPrototype */,
+				A60FC8AB2F9DE11700D1F3F5 /* Sunny */,
 			);
-			name = NFCAlarmPrototype;
+			name = Sunny;
 			packageProductDependencies = (
 			);
 			productName = NFCAlarmPrototype;
-			productReference = A60FC8A92F9DE11700D1F3F5 /* NFCAlarmPrototype.app */;
+			productReference = A60FC8A92F9DE11700D1F3F5 /* Sunny.app */;
 			productType = "com.apple.product-type.application";
 		};
 		A67B32952FB14BD5002FF25D /* AlarmWidgetExtension */ = {
@@ -230,7 +230,7 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				A60FC8A82F9DE11700D1F3F5 /* NFCAlarmPrototype */,
+				A60FC8A82F9DE11700D1F3F5 /* Sunny */,
 				A67B32952FB14BD5002FF25D /* AlarmWidgetExtension */,
 			);
 		};
@@ -406,14 +406,15 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_ENTITLEMENTS = NFCAlarmPrototype/NFCAlarmPrototype.entitlements;
+				CODE_SIGN_ENTITLEMENTS = Sunny/NFCAlarmPrototype.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 6947YKW9CV;
 				ENABLE_DEBUG_DYLIB = NO;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = NO;
-				INFOPLIST_FILE = NFCAlarmPrototype/Info.plist;
+				INFOPLIST_FILE = Sunny/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = Sunny;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -424,7 +425,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 1.1;
 				PRODUCT_BUNDLE_IDENTIFIER = UCLA.NFCAlarmPrototype;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
@@ -445,14 +446,15 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_ENTITLEMENTS = NFCAlarmPrototype/NFCAlarmPrototype.entitlements;
+				CODE_SIGN_ENTITLEMENTS = Sunny/NFCAlarmPrototype.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 6947YKW9CV;
 				ENABLE_DEBUG_DYLIB = NO;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = NO;
-				INFOPLIST_FILE = NFCAlarmPrototype/Info.plist;
+				INFOPLIST_FILE = Sunny/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = Sunny;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -463,7 +465,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 1.1;
 				PRODUCT_BUNDLE_IDENTIFIER = UCLA.NFCAlarmPrototype;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
@@ -496,7 +498,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 1.1;
 				PRODUCT_BUNDLE_IDENTIFIER = UCLA.NFCAlarmPrototype.AlarmWidget;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -526,7 +528,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 1.1;
 				PRODUCT_BUNDLE_IDENTIFIER = UCLA.NFCAlarmPrototype.AlarmWidget;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -551,7 +553,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		A60FC8B42F9DE11C00D1F3F5 /* Build configuration list for PBXNativeTarget "NFCAlarmPrototype" */ = {
+		A60FC8B42F9DE11C00D1F3F5 /* Build configuration list for PBXNativeTarget "Sunny" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				A60FC8B52F9DE11C00D1F3F5 /* Debug */,

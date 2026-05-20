@@ -1,10 +1,12 @@
 import AVFoundation
+import MediaPlayer
+import UIKit
 import UserNotifications
 import Foundation
 
 final class AlarmManager: NSObject {
 
-    static let ringtoneNames = ["Classic", "Pulse", "Chime", "Urgent", "Gentle"]
+    static let ringtoneNames = ["Classic", "Pulse", "Chime", "Urgent", "Gentle", "Meadow", "Breeze", "Drift"]
 
     var isAlarmPlaying = false
 
@@ -31,12 +33,18 @@ final class AlarmManager: NSObject {
     private var activeVolume: Float = 0.8
     private var watchdogTimer: Timer?
 
+    // System-volume override: lets the alarm play at the user-chosen level
+    // regardless of the phone's current volume setting.
+    private let volumeView = MPVolumeView()
+    private var savedSystemVolume: Float = -1
+
     var onAlarmFired: ((String) -> Void)?
 
     override init() {
         super.init()
         UNUserNotificationCenter.current().delegate = self
         registerNotificationCategories()
+        SoundSynthesizer.ensureSynthesized()
         SoundLoopGenerator.ensureLoops(ringtoneNames: Self.ringtoneNames)
         systemAlarmScheduler.startObservingAlarmUpdates { alarmID in
             NotificationCenter.default.post(
@@ -87,8 +95,9 @@ final class AlarmManager: NSObject {
             guard delay > 0 else { continue }
 
             let content = UNMutableNotificationContent()
-            content.title = i == 0 ? "⏰ Rise & Tap" : "Still ringing — find Sunny!"
-            content.body = "Get up and tap your sticker to dismiss."
+            let alarmLabel = alarm.label.isEmpty ? "Alarm" : alarm.label
+            content.title = i == 0 ? "⏰ \(alarmLabel)" : "Still ringing!"
+            content.body = "Tap to open Sunny."
             content.categoryIdentifier = "ALARM"
             content.userInfo = [
                 "alarmID": alarm.id.uuidString,
@@ -144,21 +153,6 @@ final class AlarmManager: NSObject {
         if #available(iOS 16.2, *) {
             LiveActivityController.shared.end(alarmID: alarmID)
         }
-    }
-
-    func scheduleSecondChanceNotification(deadline: Date) {
-        let content = UNMutableNotificationContent()
-        content.title = "Second chance active"
-        content.body = "Scan Sunny by \(deadline.formatted(date: .omitted, time: .shortened)) and this still counts as an on-time wake-up."
-        content.sound = .default
-        content.interruptionLevel = .timeSensitive
-
-        let request = UNNotificationRequest(
-            identifier: "second-chance-active",
-            content: content,
-            trigger: UNTimeIntervalNotificationTrigger(timeInterval: 1, repeats: false)
-        )
-        UNUserNotificationCenter.current().add(request)
     }
 
     /// Starts the Live Activity for a firing alarm. Idempotent — the controller
@@ -279,6 +273,34 @@ final class AlarmManager: NSObject {
         return nil
     }
 
+    // MARK: - System volume override
+
+    private func overrideSystemVolume(to volume: Float) {
+        savedSystemVolume = AVAudioSession.sharedInstance().outputVolume
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            if self.volumeView.window == nil {
+                if let window = UIApplication.shared.connectedScenes
+                    .compactMap({ $0 as? UIWindowScene })
+                    .flatMap({ $0.windows })
+                    .first(where: { $0.isKeyWindow }) {
+                    self.volumeView.frame = CGRect(x: -200, y: -200, width: 1, height: 1)
+                    window.addSubview(self.volumeView)
+                }
+            }
+            self.volumeView.subviews.compactMap({ $0 as? UISlider }).first?.value = volume
+        }
+    }
+
+    private func restoreSystemVolume() {
+        guard savedSystemVolume >= 0 else { return }
+        let vol = savedSystemVolume
+        savedSystemVolume = -1
+        DispatchQueue.main.async { [weak self] in
+            self?.volumeView.subviews.compactMap({ $0 as? UISlider }).first?.value = vol
+        }
+    }
+
     // MARK: - In-App Audio (loops loud while app is alive — bypasses mute switch)
 
     func startAlarmAudio(volume: Float = 0.8, ringtone: String = "Classic") {
@@ -294,9 +316,9 @@ final class AlarmManager: NSObject {
 
         guard let player = try? AVAudioPlayer(contentsOf: url) else { return }
 
-        let target = max(0, min(volume, 1))
+        overrideSystemVolume(to: max(0, min(volume, 1)))
         player.numberOfLoops = -1
-        player.volume = target
+        player.volume = 1.0
         player.prepareToPlay()
         player.play()
 
@@ -320,7 +342,8 @@ final class AlarmManager: NSObject {
         } catch { return }
 
         guard let player = try? AVAudioPlayer(contentsOf: url) else { return }
-        player.volume = max(0, min(volume, 1))
+        overrideSystemVolume(to: max(0, min(volume, 1)))
+        player.volume = 1.0
         player.numberOfLoops = 0
         player.prepareToPlay()
         player.play()
@@ -330,6 +353,7 @@ final class AlarmManager: NSObject {
             guard self?.isAlarmPlaying == false else { return }
             self?.audioPlayer?.stop()
             self?.audioPlayer = nil
+            self?.restoreSystemVolume()
         }
     }
 
@@ -341,6 +365,7 @@ final class AlarmManager: NSObject {
         audioPlayer?.stop()
         audioPlayer = nil
         isAlarmPlaying = false
+        restoreSystemVolume()
         if keepAlivePlayer == nil {
             try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
         }
@@ -429,6 +454,13 @@ final class AlarmManager: NSObject {
     private func bundleURL(for ringtone: String) -> URL? {
         Bundle.main.url(forResource: "rise_\(ringtone.lowercased())", withExtension: "wav", subdirectory: "Sounds")
         ?? Bundle.main.url(forResource: "rise_\(ringtone.lowercased())", withExtension: "wav")
+        ?? synthesizedURL(for: ringtone)
+    }
+
+    private func synthesizedURL(for ringtone: String) -> URL? {
+        guard let lib = FileManager.default.urls(for: .libraryDirectory, in: .userDomainMask).first else { return nil }
+        let url = lib.appendingPathComponent("Sounds/rise_\(ringtone.lowercased()).wav")
+        return FileManager.default.fileExists(atPath: url.path) ? url : nil
     }
 
     private func notificationSoundFileName(for ringtone: String) -> String {
@@ -493,6 +525,9 @@ extension AlarmManager: UNUserNotificationCenterDelegate {
     ) {
         if response.notification.request.content.categoryIdentifier == "ALARM" {
             let alarmID = response.notification.request.content.userInfo["alarmID"] as? String ?? ""
+            // Save as fallback in case the subscriber isn't wired up yet
+            // (app launched cold from a notification tap). appDidBecomeActive picks this up.
+            UserDefaults.standard.set(alarmID, forKey: "notificationTappedAlarmID")
             DispatchQueue.main.async {
                 NotificationCenter.default.post(name: .alarmDidFire, object: nil,
                                                userInfo: ["alarmID": alarmID])
