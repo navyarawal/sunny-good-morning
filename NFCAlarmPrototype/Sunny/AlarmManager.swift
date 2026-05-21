@@ -1,5 +1,4 @@
 import AVFoundation
-import MediaPlayer
 import UIKit
 import UserNotifications
 import Foundation
@@ -32,11 +31,15 @@ final class AlarmManager: NSObject {
     private var activeRingtone = "Classic"
     private var activeVolume: Float = 0.8
     private var watchdogTimer: Timer?
+    private var alarmBackgroundTask: UIBackgroundTaskIdentifier = .invalid
+    private var alarmBackgroundTaskID: String?
 
-    // System-volume override: lets the alarm play at the user-chosen level
-    // regardless of the phone's current volume setting.
-    private let volumeView = MPVolumeView()
-    private var savedSystemVolume: Float = -1
+    private static let lowSystemVolumeThreshold: Float = 0.35
+
+    // Critical Alerts are the only notification sound type Apple lets break
+    // through Focus/Silent with an explicit volume. This app does not currently
+    // have that entitlement, so keep this false until Apple approves it.
+    private static let hasCriticalAlertsEntitlement = false
 
     var onAlarmFired: ((String) -> Void)?
 
@@ -50,7 +53,7 @@ final class AlarmManager: NSObject {
             NotificationCenter.default.post(
                 name: .alarmDidFire,
                 object: nil,
-                userInfo: ["alarmID": alarmID]
+                userInfo: ["alarmID": alarmID, "source": "AlarmKit"]
             )
         }
         registerAudioSessionObservers()
@@ -84,7 +87,6 @@ final class AlarmManager: NSObject {
         guard let firstFire = nextFiringDate(for: alarm) else { return }
 
         let soundFilename = notificationSoundFileName(for: alarm.ringtoneName)
-        let sound = UNNotificationSound(named: UNNotificationSoundName(rawValue: soundFilename))
 
         // Cap so multiple alarms don't exceed iOS's 64-pending limit
         let cap = max(1, chainCount / max(1, activeAlarmsCount))
@@ -106,7 +108,7 @@ final class AlarmManager: NSObject {
                 "volume": alarm.volume
             ]
             content.interruptionLevel = .timeSensitive
-            content.sound = sound
+            content.sound = notificationSound(named: soundFilename, volume: alarm.volume)
             // Unique threadIdentifier per chain link prevents iOS from collapsing
             // the rapid-fire notifications and suppressing repeat sounds.
             content.threadIdentifier = "alarm-\(alarm.id.uuidString)-\(i)"
@@ -117,11 +119,11 @@ final class AlarmManager: NSObject {
             UNUserNotificationCenter.current().add(request)
         }
 
+        // AlarmKit is the iOS 26+ system-level failsafe. Keep the notification
+        // chain even when AlarmKit succeeds; it is the third layer if AlarmKit
+        // authorization is denied, unavailable, or later fails.
         Task { [systemAlarmScheduler] in
-            let didScheduleSystemAlarm = await systemAlarmScheduler.schedule(alarm, soundName: soundFilename)
-            if didScheduleSystemAlarm {
-                self.cancelChain(alarmID: alarm.id.uuidString)
-            }
+            _ = await systemAlarmScheduler.schedule(alarm, soundName: soundFilename)
         }
     }
 
@@ -153,6 +155,40 @@ final class AlarmManager: NSObject {
         if #available(iOS 16.2, *) {
             LiveActivityController.shared.end(alarmID: alarmID)
         }
+    }
+
+    func scheduleSystemFollowUp(for alarm: AlarmItem, after delay: TimeInterval = 90) {
+        let soundFilename = notificationSoundFileName(for: alarm.ringtoneName)
+        Task { [systemAlarmScheduler] in
+            _ = await systemAlarmScheduler.scheduleFollowUp(
+                alarm,
+                soundName: soundFilename,
+                after: delay
+            )
+        }
+    }
+
+    func immediateFallbackNotification(alarmID: String, ringtone: String, reason: String) {
+        let content = UNMutableNotificationContent()
+        content.title = "Sunny alarm still needs you"
+        content.body = reason
+        content.categoryIdentifier = "ALARM"
+        content.userInfo = [
+            "alarmID": alarmID,
+            "chainIndex": 0,
+            "ringtone": ringtone,
+            "volume": activeVolume
+        ]
+        content.interruptionLevel = .timeSensitive
+        let soundName = notificationSoundFileName(for: ringtone)
+        content.sound = notificationSound(named: soundName, volume: activeVolume)
+
+        let request = UNNotificationRequest(
+            identifier: "alarm-\(alarmID)-immediate-fallback-\(UUID().uuidString)",
+            content: content,
+            trigger: UNTimeIntervalNotificationTrigger(timeInterval: 1, repeats: false)
+        )
+        UNUserNotificationCenter.current().add(request)
     }
 
     /// Starts the Live Activity for a firing alarm. Idempotent — the controller
@@ -240,7 +276,7 @@ final class AlarmManager: NSObject {
         let id = alarm.id.uuidString
         let work = DispatchWorkItem { [weak self] in
             guard let self else { return }
-            self.startAlarmAudio(volume: alarm.volume, ringtone: alarm.ringtoneName)
+            self.startAlarmAudio(volume: alarm.volume, ringtone: alarm.ringtoneName, alarmID: id)
             self.startLiveActivity(alarmID: id, ringtone: alarm.ringtoneName)
             self.onAlarmFired?(id)
         }
@@ -273,39 +309,14 @@ final class AlarmManager: NSObject {
         return nil
     }
 
-    // MARK: - System volume override
-
-    private func overrideSystemVolume(to volume: Float) {
-        savedSystemVolume = AVAudioSession.sharedInstance().outputVolume
-        DispatchQueue.main.async { [weak self] in
-            guard let self else { return }
-            if self.volumeView.window == nil {
-                if let window = UIApplication.shared.connectedScenes
-                    .compactMap({ $0 as? UIWindowScene })
-                    .flatMap({ $0.windows })
-                    .first(where: { $0.isKeyWindow }) {
-                    self.volumeView.frame = CGRect(x: -200, y: -200, width: 1, height: 1)
-                    window.addSubview(self.volumeView)
-                }
-            }
-            self.volumeView.subviews.compactMap({ $0 as? UISlider }).first?.value = volume
-        }
-    }
-
-    private func restoreSystemVolume() {
-        guard savedSystemVolume >= 0 else { return }
-        let vol = savedSystemVolume
-        savedSystemVolume = -1
-        DispatchQueue.main.async { [weak self] in
-            self?.volumeView.subviews.compactMap({ $0 as? UISlider }).first?.value = vol
-        }
-    }
-
     // MARK: - In-App Audio (loops loud while app is alive — bypasses mute switch)
 
-    func startAlarmAudio(volume: Float = 0.8, ringtone: String = "Classic") {
+    func startAlarmAudio(volume: Float = 0.8, ringtone: String = "Classic", alarmID: String? = nil) {
         activeVolume = volume
         activeRingtone = ringtone
+        if let alarmID {
+            alarmBackgroundTaskID = alarmID
+        }
         guard !isAlarmPlaying else { return }
         guard let url = bundleURL(for: ringtone) else { return }
 
@@ -316,9 +327,11 @@ final class AlarmManager: NSObject {
 
         guard let player = try? AVAudioPlayer(contentsOf: url) else { return }
 
-        overrideSystemVolume(to: max(0, min(volume, 1)))
+        beginAlarmBackgroundTask(alarmID: alarmBackgroundTaskID ?? "unknown")
         player.numberOfLoops = -1
-        player.volume = 1.0
+        // This is app-level gain only. iOS does not expose a supported API for
+        // apps to raise the user's system volume at alarm time.
+        player.volume = max(0, min(volume, 1))
         player.prepareToPlay()
         player.play()
 
@@ -342,8 +355,7 @@ final class AlarmManager: NSObject {
         } catch { return }
 
         guard let player = try? AVAudioPlayer(contentsOf: url) else { return }
-        overrideSystemVolume(to: max(0, min(volume, 1)))
-        player.volume = 1.0
+        player.volume = max(0, min(volume, 1))
         player.numberOfLoops = 0
         player.prepareToPlay()
         player.play()
@@ -353,7 +365,6 @@ final class AlarmManager: NSObject {
             guard self?.isAlarmPlaying == false else { return }
             self?.audioPlayer?.stop()
             self?.audioPlayer = nil
-            self?.restoreSystemVolume()
         }
     }
 
@@ -365,10 +376,47 @@ final class AlarmManager: NSObject {
         audioPlayer?.stop()
         audioPlayer = nil
         isAlarmPlaying = false
-        restoreSystemVolume()
+        endAlarmBackgroundTask()
         if keepAlivePlayer == nil {
             try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
         }
+    }
+
+    func currentOutputWarning() -> String? {
+        let session = AVAudioSession.sharedInstance()
+        if session.outputVolume < Self.lowSystemVolumeThreshold {
+            return "Your iPhone system volume is low. Sunny cannot raise it automatically, so use the hardware buttons for the loudest alarm."
+        }
+
+        let outputs = session.currentRoute.outputs
+        if outputs.contains(where: { [.headphones, .bluetoothA2DP, .bluetoothHFP, .bluetoothLE].contains($0.portType) }) {
+            return "Audio is routed to headphones or Bluetooth. Disconnect them if you need Sunny to ring from the phone speaker."
+        }
+
+        return nil
+    }
+
+    private func beginAlarmBackgroundTask(alarmID: String) {
+        guard alarmBackgroundTask == .invalid else { return }
+        alarmBackgroundTaskID = alarmID
+        alarmBackgroundTask = UIApplication.shared.beginBackgroundTask(withName: "SunnyActiveAlarm") { [weak self] in
+            guard let self else { return }
+            let id = self.alarmBackgroundTaskID ?? alarmID
+            self.immediateFallbackNotification(
+                alarmID: id,
+                ringtone: self.activeRingtone,
+                reason: "Sunny needs to stay open so you can scan your NFC sticker."
+            )
+            self.endAlarmBackgroundTask()
+        }
+    }
+
+    private func endAlarmBackgroundTask() {
+        guard alarmBackgroundTask != .invalid else { return }
+        let task = alarmBackgroundTask
+        alarmBackgroundTask = .invalid
+        alarmBackgroundTaskID = nil
+        UIApplication.shared.endBackgroundTask(task)
     }
 
     private func startWatchdog() {
@@ -378,7 +426,7 @@ final class AlarmManager: NSObject {
             guard let self else { return }
             self.watchdogTimer = Timer.scheduledTimer(withTimeInterval: 1.5, repeats: true) { [weak self] _ in
                 guard let self, self.isAlarmPlaying else { return }
-                guard self.audioPlayer?.isPlaying == false else { return }
+                guard self.audioPlayer?.isPlaying != true else { return }
                 // Audio stopped unexpectedly (volume button, interruption, etc.) — restart it
                 try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .default)
                 try? AVAudioSession.sharedInstance().setActive(true)
@@ -469,6 +517,14 @@ final class AlarmManager: NSObject {
             return "rise_\(normalized).wav"
         }
         return "rise_classic.wav"
+    }
+
+    private func notificationSound(named fileName: String, volume: Float) -> UNNotificationSound {
+        let soundName = UNNotificationSoundName(rawValue: fileName)
+        if Self.hasCriticalAlertsEntitlement {
+            return .criticalSoundNamed(soundName, withAudioVolume: max(0, min(volume, 1)))
+        }
+        return UNNotificationSound(named: soundName)
     }
 
     // MARK: - WAV builder (only used for the silent keep-alive buffer now)

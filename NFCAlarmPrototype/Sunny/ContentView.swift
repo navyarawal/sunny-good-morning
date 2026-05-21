@@ -1222,6 +1222,25 @@ private struct AlarmRingingScreen: View {
                 .padding(.top, 16)
                 .padding(.horizontal, UI.hPad)
 
+            if let warning = vm.alarmReliabilityWarning {
+                HStack(alignment: .top, spacing: 10) {
+                    Image(systemName: "speaker.wave.2.trianglebadge.exclamationmark.fill")
+                        .font(.system(size: 18, weight: .semibold))
+                    Text(warning)
+                        .font(.system(size: 13, weight: .semibold))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .foregroundStyle(.white)
+                .padding(14)
+                .background(.white.opacity(0.16), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .strokeBorder(.white.opacity(0.22), lineWidth: 1)
+                )
+                .padding(.horizontal, UI.hPad)
+                .padding(.top, 14)
+            }
+
             Spacer()
 
             VStack(spacing: 10) {

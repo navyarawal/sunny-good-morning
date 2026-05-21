@@ -126,6 +126,7 @@ final class AlarmAppViewModel: ObservableObject {
     @Published var isEmergencyDismissActive = false
     @Published var emergencyTapsRemaining = 0
     @Published var emergencyGridPosition = Int.random(in: 0..<25)
+    @Published var alarmReliabilityWarning: String?
 
     @Published var wakeStreak: Int = 0 {
         didSet { UserDefaults.standard.set(wakeStreak, forKey: "wakeStreak") }
@@ -157,12 +158,22 @@ final class AlarmAppViewModel: ObservableObject {
         UserDefaults.standard.set(Date(), forKey: "lastAppOpenDate")
         let active = alarms.filter(\.isEnabled)
         active.forEach { alarmManager.scheduleAlarm($0, activeAlarmsCount: active.count) }
+        AlarmBackgroundTaskCoordinator.shared.scheduleNextRefresh(for: active)
         NotificationCenter.default
             .publisher(for: .alarmDidFire)
             .receive(on: RunLoop.main)
             .sink { [weak self] note in
                 let id = note.userInfo?["alarmID"] as? String
-                self?.triggerAlarmRinging(alarmID: id)
+                let source = note.userInfo?["source"] as? String
+                self?.triggerAlarmRinging(alarmID: id, scheduleSystemFollowUp: source == "AlarmKit")
+            }
+            .store(in: &cancellables)
+
+        NotificationCenter.default
+            .publisher(for: .alarmBackgroundRefresh)
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in
+                self?.appDidEnterBackground()
             }
             .store(in: &cancellables)
 
@@ -179,6 +190,7 @@ final class AlarmAppViewModel: ObservableObject {
     func appDidEnterBackground() {
         let active = alarms.filter { $0.isEnabled }
         guard !active.isEmpty else { return }
+        AlarmBackgroundTaskCoordinator.shared.scheduleNextRefresh(for: active)
         alarmManager.startBackgroundMode(alarms: active)
         // Start Live Activities now while we're guaranteed to be running.
         // The DispatchWorkItem path also starts them when the alarm fires,
@@ -202,7 +214,7 @@ final class AlarmAppViewModel: ObservableObject {
         // of whether the app was in background or force-quit when AlarmKit fired.
         if let pendingID = UserDefaults.standard.string(forKey: "alarmKitOpenedAlarmID") {
             UserDefaults.standard.removeObject(forKey: "alarmKitOpenedAlarmID")
-            triggerAlarmRinging(alarmID: pendingID)
+            triggerAlarmRinging(alarmID: pendingID, scheduleSystemFollowUp: true)
             return
         }
 
@@ -274,12 +286,14 @@ final class AlarmAppViewModel: ObservableObject {
         for alarm in enabled {
             alarmManager.scheduleAlarm(alarm, activeAlarmsCount: enabled.count)
         }
+        AlarmBackgroundTaskCoordinator.shared.scheduleNextRefresh(for: enabled)
     }
 
     func updateAlarm(_ alarm: AlarmItem) {
         if let idx = alarms.firstIndex(where: { $0.id == alarm.id }) {
             alarms[idx] = alarm
             alarmManager.scheduleAlarm(alarm, activeAlarmsCount: activeAlarmsCount)
+            AlarmBackgroundTaskCoordinator.shared.scheduleNextRefresh(for: alarms.filter(\.isEnabled))
         }
     }
 
@@ -294,6 +308,7 @@ final class AlarmAppViewModel: ObservableObject {
             alarms[idx].isEnabled.toggle()
             if alarms[idx].isEnabled {
                 alarmManager.scheduleAlarm(alarms[idx], activeAlarmsCount: activeAlarmsCount)
+                AlarmBackgroundTaskCoordinator.shared.scheduleNextRefresh(for: alarms.filter(\.isEnabled))
             } else {
                 alarmManager.cancelAlarm(alarms[idx])
                 rescheduleAllAlarms()
@@ -322,13 +337,14 @@ final class AlarmAppViewModel: ObservableObject {
     func finishSetup() {
         alarms.append(onboardingAlarm)
         alarmManager.scheduleAlarm(onboardingAlarm, activeAlarmsCount: activeAlarmsCount)
+        AlarmBackgroundTaskCoordinator.shared.scheduleNextRefresh(for: alarms.filter(\.isEnabled))
         UserDefaults.standard.set(true, forKey: "hasCompletedSetup")
         route = .home
     }
 
     // MARK: Alarm ringing
 
-    func triggerAlarmRinging(alarmID: String?) {
+    func triggerAlarmRinging(alarmID: String?, scheduleSystemFollowUp: Bool = false) {
         if let id = alarmID, let alarm = alarms.first(where: { $0.id.uuidString == id }) {
             activeAlarm = alarm
         } else {
@@ -341,13 +357,18 @@ final class AlarmAppViewModel: ObservableObject {
         isEmergencyDismissActive = false
         sunMood = .excited
         route = .alarmRinging
+        alarmReliabilityWarning = alarmManager.currentOutputWarning()
         resumeAlarmAudio()
+        if scheduleSystemFollowUp, let alarm = activeAlarm {
+            alarmManager.scheduleSystemFollowUp(for: alarm, after: 90)
+        }
     }
 
     private func resumeAlarmAudio() {
         alarmManager.startAlarmAudio(
             volume: activeAlarm?.volume ?? 0.8,
-            ringtone: activeAlarm?.ringtoneName ?? "Classic"
+            ringtone: activeAlarm?.ringtoneName ?? "Classic",
+            alarmID: activeAlarm?.id.uuidString
         )
     }
 
@@ -361,6 +382,7 @@ final class AlarmAppViewModel: ObservableObject {
                 let id = self.activeAlarm?.id.uuidString ?? ""
                 self.alarmManager.dismissAlarm(alarmID: id)
                 self.clearPendingAlarm()
+                self.alarmReliabilityWarning = nil
                 let levelBefore = self.sunLevel
                 self.wakeStreak += 1
                 if self.sunLevel != levelBefore {
@@ -372,6 +394,7 @@ final class AlarmAppViewModel: ObservableObject {
                 }
             } else {
                 self.nfcError = "Wrong sticker — tap your registered one."
+                self.resumeAlarmAudio()
             }
         }
     }
@@ -397,6 +420,7 @@ final class AlarmAppViewModel: ObservableObject {
             UserDefaults.standard.set(priorUses + 1, forKey: DefaultsKey.emergencyDismissUseCount)
             UserDefaults.standard.set(todayStamp, forKey: DefaultsKey.emergencyDismissDay)
             clearPendingAlarm()
+            alarmReliabilityWarning = nil
             isEmergencyDismissActive = false
             let levelBefore = sunLevel
             wakeStreak += 1

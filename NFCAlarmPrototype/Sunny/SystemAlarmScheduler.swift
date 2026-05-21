@@ -35,6 +35,20 @@ final class SystemAlarmScheduler {
         return false
     }
 
+    func scheduleFollowUp(_ alarm: AlarmItem, soundName: String, after delay: TimeInterval) async -> Bool {
+        guard Self.isSystemAlarmKitEnabled else { return false }
+        #if canImport(AlarmKit)
+        if #available(iOS 26.0, *) {
+            return await SystemAlarmKitBackend.shared.scheduleFollowUp(
+                alarm,
+                soundName: soundName,
+                after: delay
+            )
+        }
+        #endif
+        return false
+    }
+
     func cancel(id: UUID) {
         #if canImport(AlarmKit)
         if #available(iOS 26.0, *) {
@@ -60,10 +74,9 @@ final class SystemAlarmScheduler {
         #endif
     }
 
-    // AlarmKit can break through Focus/Silent mode, but the system alarm UI has
-    // a stop affordance that can't be forced through our NFC mission. Keep it
-    // disabled while Sunny's product rule is "NFC or emergency challenge only."
-    private static let isSystemAlarmKitEnabled = false
+    // AlarmKit is now used exactly as a failsafe: if iOS kills Sunny, the
+    // system-level alarm still rings and opens the app back into NFC dismissal.
+    private static let isSystemAlarmKitEnabled = true
 }
 
 #if canImport(AlarmKit)
@@ -104,6 +117,8 @@ private final class SystemAlarmKitBackend {
 
     private let manager = AlarmKit.AlarmManager.shared
     private var updatesTask: Task<Void, Never>?
+    private let followUpPrefix = "alarmKitFollowUpID-"
+    private var emittedAlertingIDs = Set<UUID>()
 
     private init() {}
 
@@ -129,6 +144,7 @@ private final class SystemAlarmKitBackend {
 
         do {
             try? manager.cancel(id: alarm.id)
+            cancelFollowUp(for: alarm.id)
 
             typealias Configuration = AlarmKit.AlarmManager.AlarmConfiguration<SunnyAlarmMetadata>
 
@@ -168,24 +184,110 @@ private final class SystemAlarmKitBackend {
         }
     }
 
+    func scheduleFollowUp(_ alarm: AlarmItem, soundName: String, after delay: TimeInterval) async -> Bool {
+        guard await requestAuthorizationIfPossible() else { return false }
+
+        do {
+            let followUpID = followUpID(for: alarm.id)
+            try? manager.cancel(id: followUpID)
+
+            typealias Configuration = AlarmKit.AlarmManager.AlarmConfiguration<SunnyAlarmMetadata>
+
+            let title = alarm.label.isEmpty ? "Still ringing ☀️" : "\(alarm.label) still needs you"
+            let openButton = AlarmButton(
+                text: "Open Sunny",
+                textColor: .white,
+                systemImageName: "sun.max.fill"
+            )
+            let alert = AlarmPresentation.Alert(
+                title: LocalizedStringResource(stringLiteral: title),
+                secondaryButton: openButton,
+                secondaryButtonBehavior: .custom
+            )
+            let presentation = AlarmPresentation(alert: alert)
+            let attributes = AlarmAttributes(
+                presentation: presentation,
+                metadata: SunnyAlarmMetadata(
+                    alarmID: alarm.id.uuidString,
+                    ringtoneName: alarm.ringtoneName
+                ),
+                tintColor: Color(red: 0.91, green: 0.53, blue: 0.12)
+            )
+            let configuration = Configuration.alarm(
+                schedule: .fixed(Date().addingTimeInterval(max(30, delay))),
+                attributes: attributes,
+                stopIntent: OpenSunnyAlarmIntent(alarmID: alarm.id.uuidString),
+                secondaryIntent: OpenSunnyAlarmIntent(alarmID: alarm.id.uuidString),
+                sound: .named(soundName)
+            )
+
+            _ = try await manager.schedule(id: followUpID, configuration: configuration)
+            return true
+        } catch {
+            return false
+        }
+    }
+
     func cancel(id: UUID) {
         try? manager.cancel(id: id)
+        cancelFollowUp(for: id)
     }
 
     func stop(id: UUID) {
         try? manager.stop(id: id)
         try? manager.cancel(id: id)
+        cancelFollowUp(for: id)
     }
 
     func startObservingAlarmUpdates(onAlert: @escaping @MainActor (String) -> Void) {
         guard updatesTask == nil else { return }
         updatesTask = Task {
             for await alarms in manager.alarmUpdates {
-                for alarm in alarms where alarm.state == .alerting {
-                    await onAlert(alarm.id.uuidString)
+                let currentlyAlerting = Set(alarms.filter { $0.state == .alerting }.map(\.id))
+                emittedAlertingIDs.formIntersection(currentlyAlerting)
+
+                for alarm in alarms where alarm.state == .alerting && !emittedAlertingIDs.contains(alarm.id) {
+                    emittedAlertingIDs.insert(alarm.id)
+                    let originalID = originalAlarmID(forAlertingID: alarm.id).uuidString
+                    await MainActor.run {
+                        onAlert(originalID)
+                    }
                 }
             }
         }
+    }
+
+    private func followUpID(for alarmID: UUID) -> UUID {
+        let key = followUpPrefix + alarmID.uuidString
+        if let existing = UserDefaults.standard.string(forKey: key),
+           let id = UUID(uuidString: existing) {
+            return id
+        }
+        let id = UUID()
+        UserDefaults.standard.set(id.uuidString, forKey: key)
+        return id
+    }
+
+    private func cancelFollowUp(for alarmID: UUID) {
+        let key = followUpPrefix + alarmID.uuidString
+        guard let existing = UserDefaults.standard.string(forKey: key),
+              let id = UUID(uuidString: existing) else { return }
+        try? manager.stop(id: id)
+        try? manager.cancel(id: id)
+        UserDefaults.standard.removeObject(forKey: key)
+    }
+
+    private func originalAlarmID(forAlertingID alertingID: UUID) -> UUID {
+        for (key, value) in UserDefaults.standard.dictionaryRepresentation()
+            where key.hasPrefix(followUpPrefix) {
+            guard let stored = value as? String,
+                  stored == alertingID.uuidString,
+                  let original = UUID(uuidString: String(key.dropFirst(followUpPrefix.count))) else {
+                continue
+            }
+            return original
+        }
+        return alertingID
     }
 
     private func schedule(for alarm: AlarmItem) -> AlarmKit.Alarm.Schedule {
